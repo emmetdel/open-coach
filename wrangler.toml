@@ -1,0 +1,22 @@
+name = "opencoach"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+[[d1_databases]]
+binding = "DB"
+database_name = "opencoach-db"
+database_id = "YOUR_ID_HERE"
+
+# Email Workers binding for sending notifications
+# Requires Email Routing enabled on your domain
+# See: https://developers.cloudflare.com/email-routing/email-workers/send-email-workers/
+# Uncomment and configure once you have Email Routing set up:
+# [[send_email]]
+# name = "EMAIL"
+
+[triggers]
+crons = [
+    "0 */4 * * *",  # Sync loop (Every 4 hours)
+    "0 7 * * *",    # Rescheduler (7 AM)
+    "0 20 * * 0"    # Planner (Sunday 8 PM)
+]
