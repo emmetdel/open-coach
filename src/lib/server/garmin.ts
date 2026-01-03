@@ -41,12 +41,18 @@ interface OAuth2Token {
 async function garminApiRequest(
 	db: D1Database,
 	endpoint: string,
-	params?: Record<string, string | number>
+	params?: Record<string, string | number>,
+	retryCount = 0
 ): Promise<unknown> {
+	// Proactively refresh token if needed
+	await ensureValidToken(db);
+
 	const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
 
 	if (!oauth2Str) {
-		throw new Error('Garmin tokens not configured. Run the auth script first.');
+		throw new Error(
+			'Garmin not connected. Run the Python auth script (scripts/garmin-auth.py) to authenticate.'
+		);
 	}
 
 	const oauth2: OAuth2Token = JSON.parse(oauth2Str);
@@ -75,14 +81,17 @@ async function garminApiRequest(
 
 	console.log('Garmin API response status:', response.status);
 
-	if (response.status === 401) {
-		// Token expired - need to refresh
+	if (response.status === 401 && retryCount < 2) {
+		// Token expired - try to refresh
+		console.log('Token expired, attempting refresh...');
 		const refreshed = await refreshToken(db, oauth2);
 		if (refreshed) {
 			// Retry with new token
-			return garminApiRequest(db, endpoint, params);
+			return garminApiRequest(db, endpoint, params, retryCount + 1);
 		}
-		throw new Error('Garmin session expired. Please re-authenticate.');
+		throw new Error(
+			'Garmin session expired. Please run the auth script again: python scripts/garmin-auth.py'
+		);
 	}
 
 	if (!response.ok) {
@@ -95,12 +104,25 @@ async function garminApiRequest(
 }
 
 // Refresh OAuth2 token
+// Refresh OAuth2 token using OAuth1 credentials
 async function refreshToken(db: D1Database, oauth2: OAuth2Token): Promise<boolean> {
 	try {
+		// Get OAuth1 token for authentication
+		const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
+		if (!oauth1Str) {
+			console.error('No OAuth1 token for refresh');
+			return false;
+		}
+
+		const oauth1 = JSON.parse(oauth1Str);
+
+		// Garmin uses a specific refresh endpoint with OAuth1 auth
+		// The refresh_token grant requires OAuth1 signature
 		const response = await fetch('https://connect.garmin.com/services/auth/token/refresh', {
 			method: 'POST',
 			headers: {
-				'Content-Type': 'application/x-www-form-urlencoded'
+				'Content-Type': 'application/x-www-form-urlencoded',
+				'Authorization': `Bearer ${oauth2.refresh_token}`
 			},
 			body: new URLSearchParams({
 				refresh_token: oauth2.refresh_token,
@@ -109,17 +131,80 @@ async function refreshToken(db: D1Database, oauth2: OAuth2Token): Promise<boolea
 		});
 
 		if (!response.ok) {
-			console.error('Token refresh failed:', response.status);
-			return false;
+			const errorText = await response.text();
+			console.error('Token refresh failed:', response.status, errorText);
+			
+			// Try alternative refresh method using OAuth1
+			return await refreshTokenWithOAuth1(db, oauth1, oauth2);
 		}
 
 		const newToken = await response.json() as OAuth2Token;
+		// Preserve refresh_token if not returned
+		if (!newToken.refresh_token) {
+			newToken.refresh_token = oauth2.refresh_token;
+		}
 		await setSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN, JSON.stringify(newToken));
+		console.log('Token refreshed successfully');
 		return true;
 	} catch (error) {
 		console.error('Token refresh error:', error);
 		return false;
 	}
+}
+
+// Alternative refresh using OAuth1 exchange
+async function refreshTokenWithOAuth1(
+	db: D1Database,
+	oauth1: { oauth_token: string; oauth_token_secret: string },
+	_oauth2: OAuth2Token
+): Promise<boolean> {
+	try {
+		// Exchange OAuth1 for new OAuth2 token
+		const response = await fetch('https://connect.garmin.com/modern/di-oauth/exchange', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/x-www-form-urlencoded',
+				'Authorization': `OAuth oauth_token="${oauth1.oauth_token}"`
+			}
+		});
+
+		if (!response.ok) {
+			console.error('OAuth1 exchange failed:', response.status);
+			return false;
+		}
+
+		const newToken = await response.json() as OAuth2Token;
+		await setSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN, JSON.stringify(newToken));
+		console.log('Token refreshed via OAuth1 exchange');
+		return true;
+	} catch (error) {
+		console.error('OAuth1 exchange error:', error);
+		return false;
+	}
+}
+
+// Check if token needs refresh (expires within 5 minutes)
+function tokenNeedsRefresh(oauth2: OAuth2Token): boolean {
+	if (!oauth2.expires_at) return false;
+	const expiresAt = new Date(oauth2.expires_at).getTime();
+	const now = Date.now();
+	const fiveMinutes = 5 * 60 * 1000;
+	return expiresAt - now < fiveMinutes;
+}
+
+// Proactively refresh token if needed
+async function ensureValidToken(db: D1Database): Promise<boolean> {
+	const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
+	if (!oauth2Str) return false;
+
+	const oauth2: OAuth2Token = JSON.parse(oauth2Str);
+	
+	if (tokenNeedsRefresh(oauth2)) {
+		console.log('Token expiring soon, refreshing proactively...');
+		return await refreshToken(db, oauth2);
+	}
+	
+	return true;
 }
 
 // Check if we have valid tokens

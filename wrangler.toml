@@ -22,6 +22,7 @@ OPENROUTER_MODEL = "anthropic/claude-3.5-haiku"
 
 [triggers]
 crons = [
+    "*/30 * * * *", # Token refresh (Every 30 min)
     "0 */4 * * *",  # Sync loop (Every 4 hours)
     "0 7 * * *",    # Morning reminder + Rescheduler (7 AM)
     "0 20 * * *",   # Evening reminder (8 PM daily)
