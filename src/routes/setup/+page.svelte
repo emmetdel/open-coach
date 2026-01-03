@@ -6,33 +6,27 @@
 	import { Label } from '$lib/components/ui/label';
 	import { Textarea } from '$lib/components/ui/textarea';
 	import { CheckCircle, ChevronRight, Loader2, AlertCircle, Bell, Mail } from 'lucide-svelte';
+	import type { PageData } from './$types';
 
-	const AVAILABLE_MODELS = [
-		{ id: 'anthropic/claude-3.5-haiku', name: 'Claude 3.5 Haiku', provider: 'Anthropic' },
-		{ id: 'anthropic/claude-3.5-sonnet', name: 'Claude 3.5 Sonnet', provider: 'Anthropic' },
-		{ id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'OpenAI' },
-		{ id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'OpenAI' },
-		{ id: 'google/gemini-2.0-flash-001', name: 'Gemini 2.0 Flash', provider: 'Google' },
-		{ id: 'meta-llama/llama-3.3-70b-instruct', name: 'Llama 3.3 70B', provider: 'Meta' },
-		{ id: 'mistralai/mistral-small-24b-instruct-2501', name: 'Mistral Small', provider: 'Mistral' },
-		{ id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'DeepSeek' }
-	];
+	let { data }: { data: PageData } = $props();
 
-	let step = $state(1);
+	// Check if user already has settings (editing mode)
+	const isEditing = !!(data.existingSettings?.garminEmail && data.existingSettings?.targetDate);
+
+	// Start at step 2 (Goals) if editing, since that's what they likely want to change
+	let step = $state(isEditing ? 2 : 1);
 	let loading = $state(false);
 	let error = $state('');
 
-	// Step 1: Credentials
-	let garminEmail = $state('');
+	// Step 1: Garmin Credentials - pre-populate if existing
+	let garminEmail = $state(data.existingSettings?.garminEmail || '');
 	let garminPassword = $state('');
-	let openrouterKey = $state('');
-	let selectedModel = $state('anthropic/claude-3.5-haiku');
-	let skipValidation = $state(false);
+	let skipValidation = $state(true); // Default to skip since Garmin blocks automated login
 
-	// Step 2: Goals
-	let targetDate = $state('');
-	let selectedDays = $state<string[]>([]);
-	let currentFitness = $state('');
+	// Step 2: Goals - pre-populate if existing
+	let targetDate = $state(data.existingSettings?.targetDate || '');
+	let selectedDays = $state<string[]>(data.existingSettings?.availableDays || []);
+	let currentFitness = $state(data.existingSettings?.currentFitness || '');
 
 	// Step 3: Notifications
 	let notificationEmail = $state('');
@@ -52,8 +46,8 @@
 	}
 
 	async function saveCredentials() {
-		if (!garminEmail || !garminPassword || !openrouterKey) {
-			error = 'Please fill in all fields';
+		if (!garminEmail || !garminPassword) {
+			error = 'Please enter your Garmin email and password';
 			return;
 		}
 
@@ -67,9 +61,7 @@
 				body: JSON.stringify({
 					garmin_email: garminEmail,
 					garmin_password: garminPassword,
-					openrouter_key: openrouterKey,
-					openrouter_model: selectedModel,
-					skip_validation: skipValidation
+					skip_garmin_validation: skipValidation
 				})
 			});
 
@@ -88,7 +80,7 @@
 		}
 	}
 
-	async function saveGoals() {
+	async function saveGoals(andGeneratePlan = false) {
 		if (!targetDate || selectedDays.length === 0) {
 			error = 'Please select a target date and at least one available day';
 			return;
@@ -108,10 +100,17 @@
 				})
 			});
 
-			const data = await res.json();
+			const result = await res.json();
 
-			if (!res.ok || !data.success) {
-				error = data.errors?.join(', ') || 'Failed to save goals';
+			if (!res.ok || !result.success) {
+				error = result.errors?.join(', ') || 'Failed to save goals';
+				return;
+			}
+
+			// If editing, regenerate the plan and go back to dashboard
+			if (andGeneratePlan || isEditing) {
+				await fetch('/api/plan', { method: 'POST' });
+				goto('/');
 				return;
 			}
 
@@ -148,7 +147,7 @@
 			// Subscribe to push
 			const subscription = await registration.pushManager.subscribe({
 				userVisibleOnly: true,
-				applicationServerKey: urlBase64ToUint8Array(publicKey)
+				applicationServerKey: urlBase64ToUint8Array(publicKey) as BufferSource
 			});
 
 			// Save subscription to server
@@ -247,13 +246,13 @@
 				{/each}
 			</div>
 
-			<!-- Step 1: Credentials -->
+			<!-- Step 1: Garmin Credentials -->
 			{#if step === 1}
 				<Card class="border-slate-700/50 bg-slate-850/80 backdrop-blur">
 					<CardHeader>
-						<CardTitle>Connect Your Accounts</CardTitle>
+						<CardTitle>Connect Garmin</CardTitle>
 						<CardDescription>
-							Link your Garmin account and add your OpenRouter API key.
+							Link your Garmin Connect account to sync your runs.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -281,35 +280,9 @@
 								</div>
 							</div>
 
-							<div class="border-t border-slate-700 pt-6 space-y-4">
-								<div class="space-y-2">
-									<Label for="openrouter-key">OpenRouter API Key</Label>
-									<Input
-										id="openrouter-key"
-										type="password"
-										placeholder="sk-or-..."
-										bind:value={openrouterKey}
-									/>
-									<p class="text-xs text-slate-500">
-										Get your API key from <a href="https://openrouter.ai/keys" target="_blank" rel="noopener" class="text-forest-400 hover:underline">openrouter.ai</a>
-									</p>
-								</div>
-
-								<div class="space-y-2">
-									<Label for="model-select">AI Model</Label>
-									<select
-										id="model-select"
-										bind:value={selectedModel}
-										class="flex h-11 w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-2 text-sm text-slate-100 focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500/20"
-									>
-										{#each AVAILABLE_MODELS as model}
-											<option value={model.id}>{model.name} ({model.provider})</option>
-										{/each}
-									</select>
-									<p class="text-xs text-slate-500">
-										Choose your preferred AI model for coaching feedback
-									</p>
-								</div>
+							<div class="rounded-lg bg-slate-800/50 p-4 text-sm text-slate-400">
+								<p class="font-medium text-slate-300 mb-2">💡 MFA Enabled?</p>
+								<p>If Garmin blocks login, you can import tokens manually from the dashboard using the Python auth script.</p>
 							</div>
 
 							{#if error}
@@ -319,19 +292,10 @@
 								</div>
 							{/if}
 
-							<label class="flex items-center gap-2 text-sm text-slate-400">
-								<input
-									type="checkbox"
-									bind:checked={skipValidation}
-									class="h-4 w-4 rounded border-slate-600 bg-slate-700 text-forest-600 focus:ring-forest-500"
-								/>
-								Skip validation (use if Garmin blocks automated login)
-							</label>
-
 							<Button type="submit" class="w-full" disabled={loading}>
 								{#if loading}
 									<Loader2 class="h-4 w-4 animate-spin" />
-									Validating...
+									Saving...
 								{:else}
 									Continue
 									<ChevronRight class="h-4 w-4" />
@@ -346,9 +310,11 @@
 			{#if step === 2}
 				<Card class="border-slate-700/50 bg-slate-850/80 backdrop-blur">
 					<CardHeader>
-						<CardTitle>Set Your Goals</CardTitle>
+						<CardTitle>{isEditing ? 'Edit Your Goals' : 'Set Your Goals'}</CardTitle>
 						<CardDescription>
-							Tell us about your running goals and availability.
+							{isEditing 
+								? 'Update your running days and goals. A new plan will be generated.'
+								: 'Tell us about your running goals and availability.'}
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
@@ -399,18 +365,32 @@
 							{/if}
 
 							<div class="flex gap-3">
-								<Button type="button" variant="outline" onclick={() => (step = 1)} class="flex-1">
-									Back
-								</Button>
-								<Button type="submit" class="flex-1" disabled={loading}>
-									{#if loading}
-										<Loader2 class="h-4 w-4 animate-spin" />
-										Saving...
-									{:else}
-										Continue
-										<ChevronRight class="h-4 w-4" />
-									{/if}
-								</Button>
+								{#if isEditing}
+									<Button type="button" variant="outline" onclick={() => goto('/')} class="flex-1">
+										Cancel
+									</Button>
+									<Button type="submit" class="flex-1" disabled={loading}>
+										{#if loading}
+											<Loader2 class="h-4 w-4 animate-spin" />
+											Saving...
+										{:else}
+											Save & Regenerate Plan
+										{/if}
+									</Button>
+								{:else}
+									<Button type="button" variant="outline" onclick={() => (step = 1)} class="flex-1">
+										Back
+									</Button>
+									<Button type="submit" class="flex-1" disabled={loading}>
+										{#if loading}
+											<Loader2 class="h-4 w-4 animate-spin" />
+											Saving...
+										{:else}
+											Continue
+											<ChevronRight class="h-4 w-4" />
+										{/if}
+									</Button>
+								{/if}
 							</div>
 						</form>
 					</CardContent>

@@ -1,0 +1,11 @@
+# OpenCoach Development Environment Variables
+# Copy this file to .dev.vars and fill in your values
+
+# OpenRouter API Key (required for AI coaching feedback)
+# Get your key at: https://openrouter.ai/keys
+OPENROUTER_API_KEY=sk-or-v1-your-key-here
+
+# Optional: Override the default AI model
+# Available models: https://openrouter.ai/models
+# OPENROUTER_MODEL=anthropic/claude-3.5-haiku
+

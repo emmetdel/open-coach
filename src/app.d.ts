@@ -12,6 +12,9 @@ declare global {
 				EMAIL?: {
 					send(message: EmailMessage): Promise<void>;
 				};
+				// OpenRouter AI configuration (set via wrangler secret or .dev.vars)
+				OPENROUTER_API_KEY?: string;
+				OPENROUTER_MODEL?: string;
 			};
 			context: {
 				waitUntil(promise: Promise<unknown>): void;

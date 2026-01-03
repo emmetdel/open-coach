@@ -15,8 +15,10 @@ export interface Run {
 export interface TrainingPlan {
 	id: string;
 	scheduled_date: string;
-	type: 'Easy' | 'Interval' | 'Long' | 'Rest';
-	target_distance_km: number;
+	week_number: number;
+	type: 'Easy' | 'Interval' | 'Long' | 'Rest' | 'Walk-Run';
+	target_distance_km: number | null;
+	target_duration_minutes: number | null;
 	description: string;
 	status: 'Pending' | 'Completed' | 'Missed' | 'Rescheduled';
 	google_event_id: string | null;
@@ -209,11 +211,173 @@ export async function getConsistencyStats(
 	return result.results;
 }
 
-// Check if user has completed setup
+// Check if user has completed setup (just needs Garmin and goals)
 export async function hasCompletedSetup(db: D1Database): Promise<boolean> {
 	const garminEmail = await getSetting(db, SETTING_KEYS.GARMIN_EMAIL);
-	const openrouterKey = await getSetting(db, SETTING_KEYS.OPENROUTER_KEY);
-	return !!(garminEmail && openrouterKey);
+	const targetDate = await getSetting(db, SETTING_KEYS.TARGET_DATE);
+	const availableDays = await getSetting(db, SETTING_KEYS.AVAILABLE_DAYS);
+	return !!(garminEmail && targetDate && availableDays);
+}
+
+// =========== Training Plan Functions ===========
+
+// Get upcoming planned runs
+export async function getUpcomingPlans(db: D1Database, limit = 7): Promise<TrainingPlan[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM training_plan 
+			 WHERE scheduled_date >= date('now') AND status = 'Pending'
+			 ORDER BY scheduled_date ASC 
+			 LIMIT ?`
+		)
+		.bind(limit)
+		.all<TrainingPlan>();
+	return result.results;
+}
+
+// Get all plans for a date range
+export async function getPlansForRange(
+	db: D1Database,
+	startDate: string,
+	endDate: string
+): Promise<TrainingPlan[]> {
+	const result = await db
+		.prepare(
+			`SELECT * FROM training_plan 
+			 WHERE scheduled_date >= ? AND scheduled_date <= ?
+			 ORDER BY scheduled_date ASC`
+		)
+		.bind(startDate, endDate)
+		.all<TrainingPlan>();
+	return result.results;
+}
+
+// Insert a new training plan
+export async function insertPlan(db: D1Database, plan: TrainingPlan): Promise<void> {
+	await db
+		.prepare(
+			`INSERT INTO training_plan (id, scheduled_date, week_number, type, target_distance_km, target_duration_minutes, description, status, google_event_id, garmin_workout_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+		)
+		.bind(
+			plan.id,
+			plan.scheduled_date,
+			plan.week_number,
+			plan.type,
+			plan.target_distance_km,
+			plan.target_duration_minutes,
+			plan.description,
+			plan.status,
+			plan.google_event_id,
+			plan.garmin_workout_id
+		)
+		.run();
+}
+
+// Get all plans grouped by week
+export async function getPlansGroupedByWeek(db: D1Database): Promise<Map<number, TrainingPlan[]>> {
+	const result = await db
+		.prepare(`SELECT * FROM training_plan WHERE status = 'Pending' ORDER BY week_number, scheduled_date`)
+		.all<TrainingPlan>();
+
+	const grouped = new Map<number, TrainingPlan[]>();
+	for (const plan of result.results) {
+		const week = plan.week_number || 1;
+		if (!grouped.has(week)) {
+			grouped.set(week, []);
+		}
+		grouped.get(week)!.push(plan);
+	}
+	return grouped;
+}
+
+// Get plan metadata
+export async function getPlanMetadata(db: D1Database): Promise<Record<string, string | null>> {
+	const result = await db
+		.prepare('SELECT key, value FROM plan_metadata')
+		.all<{ key: string; value: string }>();
+
+	const metadata: Record<string, string | null> = {};
+	for (const row of result.results) {
+		metadata[row.key] = row.value;
+	}
+	return metadata;
+}
+
+// Set plan metadata
+export async function setPlanMetadata(db: D1Database, key: string, value: string): Promise<void> {
+	await db
+		.prepare('INSERT INTO plan_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
+		.bind(key, value)
+		.run();
+}
+
+// Delete all plans (for regenerating full plan)
+export async function deleteAllPlans(db: D1Database): Promise<void> {
+	await db.prepare('DELETE FROM training_plan').run();
+	await db.prepare('DELETE FROM plan_metadata').run();
+}
+
+// Get current week number based on plan start date
+export async function getCurrentWeekNumber(db: D1Database): Promise<number> {
+	const metadata = await getPlanMetadata(db);
+	const startDate = metadata['start_date'];
+	if (!startDate) return 1;
+
+	const start = new Date(startDate);
+	const now = new Date();
+	const diffDays = Math.floor((now.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
+	return Math.max(1, Math.floor(diffDays / 7) + 1);
+}
+
+// Update plan status
+export async function updatePlanStatus(
+	db: D1Database,
+	planId: string,
+	status: TrainingPlan['status']
+): Promise<void> {
+	await db
+		.prepare('UPDATE training_plan SET status = ? WHERE id = ?')
+		.bind(status, planId)
+		.run();
+}
+
+// Update Garmin workout ID after syncing to watch
+export async function updatePlanGarminId(
+	db: D1Database,
+	planId: string,
+	garminWorkoutId: string
+): Promise<void> {
+	await db
+		.prepare('UPDATE training_plan SET garmin_workout_id = ? WHERE id = ?')
+		.bind(garminWorkoutId, planId)
+		.run();
+}
+
+// Clear all Garmin workout IDs (after deleting from Garmin)
+export async function clearAllGarminWorkoutIds(db: D1Database): Promise<void> {
+	await db
+		.prepare('UPDATE training_plan SET garmin_workout_id = NULL')
+		.run();
+}
+
+// Delete future pending plans (for regenerating)
+export async function deleteFuturePlans(db: D1Database): Promise<void> {
+	await db
+		.prepare(`DELETE FROM training_plan WHERE scheduled_date >= date('now') AND status = 'Pending'`)
+		.run();
+}
+
+// Get the next scheduled run
+export async function getNextRun(db: D1Database): Promise<TrainingPlan | null> {
+	return await db
+		.prepare(
+			`SELECT * FROM training_plan 
+			 WHERE scheduled_date >= date('now') AND status = 'Pending'
+			 ORDER BY scheduled_date ASC 
+			 LIMIT 1`
+		)
+		.first<TrainingPlan>();
 }
 
 // Push subscription management

@@ -68,7 +68,7 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 	// Get AI feedback
 	try {
-		const feedback = await analyzeRun(db, run);
+		const feedback = await analyzeRun(db, run, platform?.env);
 		await updateRunFeedback(db, activityId, feedback);
 	} catch (e) {
 		console.error('Failed to get AI feedback:', e);
@@ -120,7 +120,7 @@ export const PUT: RequestHandler = async ({ request, platform }) => {
 		imported++;
 
 		// Get AI feedback (don't block on this)
-		analyzeRun(db, runData)
+		analyzeRun(db, runData, platform?.env)
 			.then((feedback) => updateRunFeedback(db, run.garmin_activity_id, feedback))
 			.catch((e) => console.error('Failed to get AI feedback:', e));
 	}

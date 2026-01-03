@@ -3,7 +3,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
-	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key } from 'lucide-svelte';
+	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key, Settings, Flame, Trophy, Lightbulb, Target } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -24,17 +24,20 @@
 	let tokenJson = $state('');
 	let importingTokens = $state(false);
 
+	// Plan generation
+	let generatingPlan = $state(false);
+
 	async function syncNow() {
 		syncing = true;
 		syncMessage = '';
 
 		try {
 			const res = await fetch('/api/sync', { method: 'POST' });
-			const result = await res.json();
+			const result: { success: boolean; message?: string; newRuns?: number } = await res.json();
 
 			if (result.success) {
-				syncMessage = result.message;
-				if (result.newRuns > 0) {
+				syncMessage = result.message || 'Synced!';
+				if (result.newRuns && result.newRuns > 0) {
 					// Reload page to show new runs
 					window.location.reload();
 				}
@@ -69,7 +72,7 @@
 				})
 			});
 
-			const result = await res.json();
+			const result: { success: boolean } = await res.json();
 
 			if (result.success) {
 				syncMessage = 'Run added! Getting AI feedback...';
@@ -107,7 +110,7 @@
 				body: JSON.stringify(tokens)
 			});
 
-			const result = await res.json();
+			const result: { success: boolean } = await res.json();
 
 			if (result.success) {
 				syncMessage = 'Garmin tokens imported! Try syncing now.';
@@ -116,10 +119,32 @@
 			} else {
 				syncMessage = 'Failed to import tokens';
 			}
-		} catch (e) {
+		} catch {
 			syncMessage = 'Invalid JSON format';
 		} finally {
 			importingTokens = false;
+		}
+	}
+
+	async function generatePlan() {
+		generatingPlan = true;
+		syncMessage = '';
+
+		try {
+			const res = await fetch('/api/plan', { method: 'POST' });
+			const result: { success: boolean; message?: string } = await res.json();
+
+			if (result.success) {
+				syncMessage = result.message || 'Plan generated!';
+				// Reload to show new plan
+				window.location.reload();
+			} else {
+				syncMessage = result.message || 'Failed to generate plan';
+			}
+		} catch {
+			syncMessage = 'Network error';
+		} finally {
+			generatingPlan = false;
 		}
 	}
 
@@ -262,9 +287,14 @@
 					<span class="font-display text-xl font-bold text-white">OpenCoach</span>
 				</div>
 				<div class="flex items-center gap-2">
-					<Button onclick={() => (showAddRun = true)} variant="secondary" size="sm">
+					<a href="/plan">
+						<Button variant="secondary" size="sm">
+							<Calendar class="h-4 w-4" />
+							View Plan
+						</Button>
+					</a>
+					<Button onclick={() => (showAddRun = true)} variant="ghost" size="sm" title="Add manual run">
 						<Plus class="h-4 w-4" />
-						Add Run
 					</Button>
 					<Button onclick={() => (showImportTokens = true)} variant="ghost" size="sm" title="Import Garmin tokens">
 						<Key class="h-4 w-4" />
@@ -273,6 +303,11 @@
 						<RefreshCw class={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
 						{syncing ? 'Syncing...' : 'Sync'}
 					</Button>
+					<a href="/setup">
+						<Button variant="ghost" size="sm" title="Settings & Goals">
+							<Settings class="h-4 w-4" />
+						</Button>
+					</a>
 				</div>
 			</div>
 		</header>
@@ -282,6 +317,84 @@
 				<div class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400">
 					{syncMessage}
 				</div>
+			{/if}
+
+			<!-- Next Run Hero -->
+			{#if data.nextRun}
+				<Card class="mb-8 border-forest-500/30 bg-gradient-to-br from-forest-900/20 to-slate-900">
+					<CardContent class="p-6">
+						<div class="flex items-center justify-between">
+							<div>
+								<p class="text-sm font-medium uppercase tracking-wider text-forest-400">Next Run</p>
+								<h2 class="mt-1 font-display text-2xl font-bold text-white">{data.nextRun.dateFormatted}</h2>
+								<div class="mt-2 flex items-center gap-3">
+									<span class="rounded-lg bg-forest-500/20 px-3 py-1 text-sm font-medium text-forest-300">
+										{data.nextRun.type}
+									</span>
+									<span class="text-lg font-semibold text-slate-200">{data.nextRun.distance}</span>
+								</div>
+								<p class="mt-2 text-sm text-slate-400">{data.nextRun.description}</p>
+							</div>
+							<div class="hidden sm:block">
+								<div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-forest-500/20">
+									<Calendar class="h-10 w-10 text-forest-400" />
+								</div>
+							</div>
+						</div>
+					</CardContent>
+				</Card>
+			{:else}
+				<!-- No plan - prompt to generate -->
+				<Card class="mb-8 border-slate-700/50 bg-gradient-to-br from-slate-850 to-slate-900">
+					<CardContent class="p-6 text-center">
+						<Calendar class="mx-auto h-12 w-12 text-slate-500" />
+						<h2 class="mt-4 font-display text-xl font-bold text-white">No Runs Planned</h2>
+						<p class="mt-2 text-sm text-slate-400">
+							Generate a training plan based on your goals and availability.
+						</p>
+						<Button onclick={generatePlan} class="mt-4" disabled={generatingPlan}>
+							{#if generatingPlan}
+								<RefreshCw class="h-4 w-4 animate-spin" />
+								Generating...
+							{:else}
+								<Zap class="h-4 w-4" />
+								Generate Plan
+							{/if}
+						</Button>
+					</CardContent>
+				</Card>
+			{/if}
+
+			<!-- Upcoming Runs -->
+			{#if data.upcomingPlans.length > 0}
+				<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
+					<CardHeader class="flex flex-row items-center justify-between">
+						<CardTitle class="flex items-center gap-2 text-lg">
+							<div class="h-2 w-2 rounded-full bg-coral-500"></div>
+							Upcoming Runs
+						</CardTitle>
+						<Button onclick={generatePlan} variant="ghost" size="sm" disabled={generatingPlan}>
+							<RefreshCw class={`h-4 w-4 ${generatingPlan ? 'animate-spin' : ''}`} />
+							Regenerate
+						</Button>
+					</CardHeader>
+					<CardContent>
+						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+							{#each data.upcomingPlans as plan}
+								<div class="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
+									<div class="flex items-center justify-between">
+										<span class="text-sm font-medium text-slate-300">{plan.dayName}</span>
+										<span class="rounded-lg bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400">
+											{plan.type}
+										</span>
+									</div>
+									<p class="mt-1 font-display text-lg font-bold text-white">{plan.distance}</p>
+									<p class="mt-1 text-xs text-slate-500">{plan.dateFormatted}</p>
+								</div>
+							{/each}
+						</div>
+					</CardContent>
+				</Card>
 			{/if}
 
 			<!-- Stats Grid -->
@@ -328,6 +441,115 @@
 					</CardContent>
 				</Card>
 			</div>
+
+			<!-- Streak & Motivation Row -->
+			<div class="mb-8 grid gap-4 sm:grid-cols-2">
+				<!-- Streak Card -->
+				<Card class="border-amber-500/20 bg-gradient-to-br from-amber-900/10 to-slate-900">
+					<CardContent class="p-6">
+						<div class="flex items-center justify-between">
+							<div>
+								<div class="flex items-center gap-2">
+									<Flame class="h-5 w-5 text-amber-400" />
+									<p class="text-sm font-medium text-amber-400">Current Streak</p>
+								</div>
+								<p class="mt-2 font-display text-4xl font-bold text-white">
+									{data.streak.current}
+									<span class="text-lg font-normal text-slate-400">runs</span>
+								</p>
+								{#if data.streak.longest > data.streak.current}
+									<p class="mt-1 text-sm text-slate-500">
+										Best: {data.streak.longest} runs
+									</p>
+								{/if}
+							</div>
+							<div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20">
+								<Trophy class="h-8 w-8 text-amber-400" />
+							</div>
+						</div>
+						{#if data.streak.current >= 3}
+							<p class="mt-4 text-sm text-amber-300/80">
+								🔥 Don't break the chain! You're on fire!
+							</p>
+						{:else if data.streak.current === 0}
+							<p class="mt-4 text-sm text-slate-400">
+								Complete your next scheduled run to start a streak!
+							</p>
+						{/if}
+					</CardContent>
+				</Card>
+
+				<!-- Tips Card -->
+				<Card class="border-sky-500/20 bg-gradient-to-br from-sky-900/10 to-slate-900">
+					<CardContent class="p-6">
+						<div class="flex items-center gap-2 mb-3">
+							<Lightbulb class="h-5 w-5 text-sky-400" />
+							<p class="text-sm font-medium text-sky-400">Coach's Tip</p>
+						</div>
+						<p class="text-slate-200 leading-relaxed">
+							{data.tips[Math.floor(Math.random() * data.tips.length)]}
+						</p>
+						{#if data.nextRun}
+							<p class="mt-4 text-xs text-slate-500">
+								Tip for your next {data.nextRun.type} run
+							</p>
+						{/if}
+					</CardContent>
+				</Card>
+			</div>
+
+			<!-- Progress Card (if user has runs) -->
+			{#if data.progress.totalRuns > 0}
+				<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
+					<CardHeader>
+						<CardTitle class="flex items-center gap-2 text-lg">
+							<Target class="h-5 w-5 text-forest-400" />
+							Your Progress
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+							<div>
+								<p class="text-sm text-slate-400">Total Distance</p>
+								<p class="font-display text-2xl font-bold text-white">{data.progress.totalDistance} km</p>
+							</div>
+							<div>
+								<p class="text-sm text-slate-400">Total Time</p>
+								<p class="font-display text-2xl font-bold text-white">{data.progress.totalDuration} min</p>
+							</div>
+							<div>
+								<p class="text-sm text-slate-400">Runs Completed</p>
+								<p class="font-display text-2xl font-bold text-white">{data.progress.totalRuns}</p>
+							</div>
+							{#if data.progress.paceImprovement}
+								<div>
+									<p class="text-sm text-slate-400">Pace Improvement</p>
+									<p class="font-display text-2xl font-bold text-forest-400">+{data.progress.paceImprovement}</p>
+								</div>
+							{/if}
+						</div>
+
+						{#if data.progress.firstRun && data.progress.latestRun && data.progress.totalRuns > 1}
+							<div class="mt-6 rounded-xl bg-slate-800/50 p-4">
+								<p class="text-sm font-medium text-slate-300 mb-3">Your Journey</p>
+								<div class="flex items-center gap-4">
+									<div class="flex-1 rounded-lg bg-slate-700/50 p-3">
+										<p class="text-xs text-slate-500">First Run</p>
+										<p class="font-medium text-slate-200">{data.progress.firstRun.distance.toFixed(1)} km</p>
+										<p class="text-xs text-slate-500">{new Date(data.progress.firstRun.date).toLocaleDateString()}</p>
+									</div>
+									<div class="text-forest-400">→</div>
+									<div class="flex-1 rounded-lg bg-forest-500/20 p-3">
+										<p class="text-xs text-forest-400">Latest Run</p>
+										<p class="font-medium text-forest-200">{data.progress.latestRun.distance.toFixed(1)} km</p>
+										<p class="text-xs text-forest-400">{new Date(data.progress.latestRun.date).toLocaleDateString()}</p>
+									</div>
+								</div>
+							</div>
+						{/if}
+					</CardContent>
+				</Card>
+			{/if}
 
 			<!-- Consistency Chart -->
 			<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">

@@ -21,7 +21,8 @@ export interface SyncResult {
 async function syncRun(
 	db: D1Database,
 	email: { send: (message: unknown) => Promise<void> } | undefined,
-	run: NormalizedRun
+	run: NormalizedRun,
+	env?: { OPENROUTER_API_KEY?: string; OPENROUTER_MODEL?: string }
 ): Promise<void> {
 	// Insert the run first (without AI feedback)
 	await insertRun(db, {
@@ -32,7 +33,7 @@ async function syncRun(
 	// Get AI feedback
 	let feedback: string | null = null;
 	try {
-		feedback = await analyzeRun(db, run);
+		feedback = await analyzeRun(db, run, env);
 		await updateRunFeedback(db, run.garmin_activity_id, feedback);
 	} catch (err) {
 		console.error('Failed to get AI feedback for run:', run.garmin_activity_id, err);
@@ -89,7 +90,7 @@ export const POST: RequestHandler = async ({ platform }) => {
 
 		// Sync each new run
 		for (const run of newRuns) {
-			await syncRun(db, email, run);
+			await syncRun(db, email, run, platform?.env);
 		}
 
 		return json({
