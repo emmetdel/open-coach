@@ -3,6 +3,7 @@
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
+	import GarminAuthModal from '$lib/components/GarminAuthModal.svelte';
 	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key, Settings, Flame, Trophy, Lightbulb, Target } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
@@ -24,6 +25,10 @@
 	let tokenJson = $state('');
 	let importingTokens = $state(false);
 
+	// Garmin re-auth modal
+	let showAuthModal = $state(false);
+	let syncAttemptAfterAuth = $state(false); // Track if this is a retry after auth
+
 	// Plan generation
 	let generatingPlan = $state(false);
 
@@ -33,22 +38,42 @@
 
 		try {
 			const res = await fetch('/api/sync', { method: 'POST' });
-			const result: { success: boolean; message?: string; newRuns?: number } = await res.json();
+			const result: { success: boolean; message?: string; newRuns?: number; authRequired?: boolean } = await res.json();
+
+			console.log('Sync result:', result);
 
 			if (result.success) {
 				syncMessage = result.message || 'Synced!';
+				syncAttemptAfterAuth = false;
 				if (result.newRuns && result.newRuns > 0) {
 					// Reload page to show new runs
 					window.location.reload();
 				}
+			} else if (result.authRequired) {
+				// Show the re-auth modal only if this isn't already a retry after auth
+				if (syncAttemptAfterAuth) {
+					syncMessage = 'Still having trouble connecting. Please check your credentials.';
+					syncAttemptAfterAuth = false;
+				} else {
+					syncMessage = '';
+					showAuthModal = true;
+				}
 			} else {
 				syncMessage = result.message || 'Sync failed';
 			}
-		} catch {
+		} catch (err) {
+			console.error('Sync error:', err);
 			syncMessage = 'Network error';
 		} finally {
 			syncing = false;
 		}
+	}
+
+	function onAuthSuccess() {
+		// After successful re-auth, try syncing again
+		syncAttemptAfterAuth = true; // Mark this as a retry so modal won't reopen
+		syncMessage = 'Reconnected! Syncing...';
+		syncNow();
 	}
 
 	async function addManualRun() {
@@ -178,6 +203,13 @@
 </script>
 
 <div class="min-h-screen bg-gradient-to-br from-slate-925 via-slate-900 to-slate-925">
+	<!-- Garmin Re-Auth Modal -->
+	<GarminAuthModal
+		open={showAuthModal}
+		onClose={() => (showAuthModal = false)}
+		onSuccess={onAuthSuccess}
+	/>
+
 	<!-- Import Tokens Modal -->
 	{#if showImportTokens}
 		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

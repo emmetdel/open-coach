@@ -1,7 +1,12 @@
 [project]
 name = "open-coach"
 version = "0.1.0"
-description = "Add your description here"
+description = "OpenCoach - Self-hosted running coach with AI"
 readme = "README.md"
-requires-python = ">=3.14"
-dependencies = []
+requires-python = ">=3.12"
+dependencies = [
+    "garth>=0.4.0",
+    "flask>=3.0.0",
+    "flask-cors>=4.0.0",
+    "python-dotenv>=1.0.0",
+]

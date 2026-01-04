@@ -15,6 +15,7 @@ export interface SyncResult {
 	success: boolean;
 	newRuns: number;
 	message: string;
+	authRequired?: boolean; // True if re-authentication is needed
 }
 
 // Sync a single run: insert to DB, get AI feedback, and notify
@@ -101,6 +102,23 @@ export const POST: RequestHandler = async ({ platform }) => {
 	} catch (err) {
 		console.error('Sync failed:', err);
 		const message = err instanceof Error ? err.message : 'Unknown error';
+
+		// Check if this is an authentication error
+		const isAuthError =
+			message.includes('expired') ||
+			message.includes('401') ||
+			message.includes('not connected') ||
+			message.includes('auth script');
+
+		if (isAuthError) {
+			return json({
+				success: false,
+				newRuns: 0,
+				message: 'Garmin session expired. Please re-authenticate.',
+				authRequired: true
+			} satisfies SyncResult);
+		}
+
 		throw error(500, `Sync failed: ${message}`);
 	}
 };
