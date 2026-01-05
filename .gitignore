@@ -1,12 +1,17 @@
 node_modules
 
-# Output
+# Build output
 .output
 .vercel
 .netlify
 .wrangler
-/.svelte-kit
-/build
+.svelte-kit
+build/
+
+# Data directories (SQLite, tokens)
+data/
+*.db
+garmin-tokens.json
 
 # OS
 .DS_Store
@@ -21,4 +26,9 @@ Thumbs.db
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
-garmin-tokens.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+uv.lock

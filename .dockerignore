@@ -1,0 +1,42 @@
+# Dependencies
+node_modules/
+
+# Build output (we build inside Docker)
+build/
+.svelte-kit/
+
+# Development files
+.env
+.env.local
+*.log
+
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Python virtual env (if any)
+.venv/
+__pycache__/
+*.pyc
+
+# Garmin tokens (mounted separately)
+garmin-tokens.json
+
+# Data directory (mounted as volume)
+data/
+
+# Documentation
+*.md
+!README.md
+
+

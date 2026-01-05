@@ -11,86 +11,129 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 - **Model Selection**: Pick from Claude, GPT-4, Gemini, Llama, and more via OpenRouter
 - **Consistency Tracking**: Focus on showing up, not speed or distance
 - **Push Notifications**: Get instant browser notifications when runs sync
-- **Email Notifications**: Receive run summaries via Cloudflare Email Workers
 - **Beautiful Dashboard**: Dark mode UI with real-time stats and run history
 
 ## Tech Stack
 
 - **Framework**: SvelteKit (TypeScript)
-- **Deployment**: Cloudflare Workers
-- **Database**: Cloudflare D1 (Serverless SQLite)
+- **Deployment**: Docker (self-hosted on Unraid, NAS, or any server)
+- **Database**: SQLite (via better-sqlite3)
 - **Styling**: Tailwind CSS v4 + Custom Components
 - **AI**: OpenRouter (access to Claude, GPT-4, Gemini, Llama, DeepSeek, and more)
-- **Garmin**: garmin-connect npm package
-- **Notifications**: Web Push API + Cloudflare Email Workers
+- **Garmin**: Garth OAuth2 tokens
+- **Notifications**: Web Push API
 
-## Getting Started
+## Quick Start with Docker
 
-### Prerequisites
+The Docker setup includes **two containers**:
+1. **opencoach** - The main SvelteKit web application
+2. **garmin-auth** - Python server for Garmin authentication with MFA support
 
-- Node.js 18+
-- A Cloudflare account
-- Garmin Connect credentials
-- OpenRouter API key ([get one free](https://openrouter.ai/keys))
+### Using Docker Compose (Recommended)
 
-### Local Development
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/open-coach.git
+   cd open-coach
+   ```
+
+2. Create your environment file:
+   ```bash
+   cp env.example .env
+   ```
+
+3. Edit `.env` with your Garmin credentials:
+   ```bash
+   GARMIN_EMAIL=your-email@example.com
+   GARMIN_PASSWORD=your-garmin-password
+   ```
+
+4. Start both containers:
+   ```bash
+   docker compose up -d
+   ```
+
+5. Open http://localhost:3000 and complete the setup wizard
+
+### Garmin Authentication Flow
+
+The auth server handles Garmin's MFA (2-factor authentication):
+
+1. When you first sync or tokens expire, OpenCoach calls the auth server
+2. If MFA is required, a popup appears in the web UI asking for your code
+3. Enter the code from your authenticator app
+4. Tokens are saved and shared between containers
+
+**Auth Server Endpoints** (http://localhost:5050):
+- `GET /health` - Health check
+- `GET /auth/status` - Check if authenticated
+- `POST /auth/auto-login` - Login with env credentials
+- `POST /auth/mfa` - Submit MFA code
+- `POST /auth/export` - Export current tokens
+
+### Unraid Deployment
+
+For Unraid, you'll need to add both containers:
+
+**Container 1: opencoach**
+- **Container Port**: 3000
+- **Host Path for /app/data**: `/mnt/user/appdata/opencoach`
+- **Host Path for /root/.garth**: `/mnt/user/appdata/opencoach/garth`
+
+**Container 2: garmin-auth**
+- **Container Port**: 5050
+- **Host Path for /root/.garth**: `/mnt/user/appdata/opencoach/garth` (same as above)
+- **Environment Variables**: `GARMIN_EMAIL`, `GARMIN_PASSWORD`
+
+### Manual Authentication (Alternative)
+
+If you prefer to authenticate manually without the auth server:
+
+1. Run the Python auth script locally:
+   ```bash
+   cd scripts
+   python garmin-auth.py
+   ```
+
+2. Copy the generated `garmin-tokens.json` to the container:
+   ```bash
+   docker cp garmin-tokens.json opencoach:/app/data/
+   ```
+
+3. Import tokens via the API:
+   ```bash
+   curl -X POST http://localhost:3000/api/garmin/tokens \
+     -H "Content-Type: application/json" \
+     -d @garmin-tokens.json
+   ```
+
+## Local Development
 
 1. Install dependencies:
    ```bash
+   cd web
    npm install
    ```
 
-2. Create a D1 database:
+2. Run database migrations:
    ```bash
-   npx wrangler d1 create opencoach-db
+   npm run db:migrate
    ```
 
-3. Update `wrangler.toml` with your database ID:
-   ```toml
-   [[d1_databases]]
-   binding = "DB"
-   database_name = "opencoach-db"
-   database_id = "YOUR_DATABASE_ID"
-   ```
-
-4. Run migrations:
-   ```bash
-   npx wrangler d1 execute opencoach-db --local --file=migrations/0001_initial.sql
-   npx wrangler d1 execute opencoach-db --local --file=migrations/0002_notifications.sql
-   ```
-
-5. Start the dev server:
+3. Start the dev server:
    ```bash
    npm run dev
    ```
 
-6. Open http://localhost:5173 and complete the setup wizard
+4. Open http://localhost:5173 and complete the setup wizard
 
-### Deployment
+## Building for Production
 
-1. Run migrations on production:
-   ```bash
-   npx wrangler d1 execute opencoach-db --remote --file=migrations/0001_initial.sql
-   npx wrangler d1 execute opencoach-db --remote --file=migrations/0002_notifications.sql
-   ```
-
-2. Deploy to Cloudflare Workers:
-   ```bash
-   npm run build
-   npx wrangler deploy
-   ```
-
-### Email Notifications (Optional)
-
-To enable email notifications:
-
-1. Set up [Cloudflare Email Routing](https://developers.cloudflare.com/email-routing/) on your domain
-2. Uncomment the email binding in `wrangler.toml`:
-   ```toml
-   [[send_email]]
-   name = "EMAIL"
-   ```
-3. Redeploy your worker
+```bash
+cd web
+npm run build
+npm start
+```
 
 ## Supported AI Models
 
@@ -111,62 +154,64 @@ OpenCoach uses OpenRouter, giving you access to multiple AI providers:
 
 ```
 open-coach/
-├── src/
-│   ├── lib/
-│   │   ├── server/
-│   │   │   ├── garmin.ts         # Garmin Connect integration
-│   │   │   ├── coach.ts          # OpenRouter AI coach
-│   │   │   ├── notifications.ts  # Push & email notifications
-│   │   │   └── db.ts             # D1 database helpers
-│   │   ├── components/ui/        # UI components (Button, Card, Input, etc.)
-│   │   └── utils.ts              # Utility functions
-│   └── routes/
-│       ├── +page.svelte          # Dashboard
-│       ├── +page.server.ts       # Dashboard data loader
-│       ├── setup/                # Onboarding wizard
-│       └── api/
-│           ├── sync/             # Manual sync endpoint
-│           ├── settings/         # Settings CRUD
-│           ├── push/             # Push subscription management
-│           └── cron/sync/        # Scheduled sync (every 4 hours)
-├── static/
-│   └── sw.js                     # Service worker for push notifications
-├── migrations/
-│   ├── 0001_initial.sql          # Core database schema
-│   └── 0002_notifications.sql    # Push subscriptions table
-└── wrangler.toml                 # Cloudflare Workers config
+├── web/                          # SvelteKit web application
+│   ├── src/
+│   │   ├── lib/server/           # Server logic (Garmin, AI, DB)
+│   │   ├── routes/               # Pages and API endpoints
+│   │   └── hooks.server.ts       # DB injection, cron startup
+│   ├── migrations/               # SQLite schema migrations
+│   ├── scripts/migrate.ts        # Database migration script
+│   ├── static/                   # Static assets
+│   ├── Dockerfile
+│   └── package.json
+│
+├── auth-server/                  # Garmin Auth Service (Python)
+│   ├── server.py                 # Flask server with MFA support
+│   ├── pyproject.toml            # Python dependencies
+│   └── Dockerfile
+│
+├── scripts/                      # Dev utilities (not deployed)
+│   ├── garmin-auth.py            # Manual Garmin auth CLI
+│   └── garmin-sync.py            # Manual activity sync
+│
+├── docker-compose.yml            # Orchestrates both services
+├── env.example                   # Environment template
+└── README.md
 ```
 
-## Cron Jobs
+## Scheduled Jobs
 
-OpenCoach uses Cloudflare scheduled triggers for background tasks:
+OpenCoach uses node-cron for background tasks:
 
 | Schedule | Job | Description |
 |----------|-----|-------------|
+| Every 30 min | Token Refresh | Proactively refreshes Garmin OAuth tokens |
 | Every 4 hours | Sync Loop | Polls Garmin for new activities |
-| Daily 7 AM | Rescheduler | Moves missed runs to next available day |
-| Sunday 8 PM | Planner | Generates next week's training plan |
+| Daily 7 AM | Morning Reminder | Sends run reminders for today |
+| Daily 8 PM | Evening Reminder | Sends preparation reminders for tomorrow |
+| Sunday 8 PM | Weekly Planner | Generates next week's training plan |
 
-## Notifications
+## Environment Variables
 
-OpenCoach supports two notification channels:
-
-### Web Push Notifications
-- Instant browser notifications
-- Works on desktop and mobile (Chrome, Firefox, Edge, Safari)
-- No server needed - uses VAPID keys stored in D1
-
-### Email Notifications (Cloudflare Email Workers)
-- Requires Email Routing on your domain
-- Beautiful HTML emails with run summaries
-- Includes AI coach feedback
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `PORT` | 3000 | Server port |
+| `HOST` | 0.0.0.0 | Server host |
+| `DATA_DIR` | ./data | Directory for SQLite database |
+| `DATABASE_PATH` | ./data/opencoach.db | Full path to database file |
+| `ENABLE_CRON` | true | Enable scheduled jobs |
+| `BASE_URL` | http://localhost:3000 | Base URL for cron callbacks |
+| `CRON_SECRET` | - | Secret for securing cron endpoints |
+| `OPENROUTER_API_KEY` | - | OpenRouter API key (optional, can set in UI) |
+| `OPENROUTER_MODEL` | anthropic/claude-3.5-haiku | Default AI model |
 
 ## Security
 
-- Garmin credentials are stored in D1 (consider adding encryption)
-- OpenRouter API key is stored in D1
-- VAPID keys for push notifications are auto-generated and stored in D1
-- All secrets should be moved to Cloudflare Secrets for production
+- SQLite database is stored in a persistent volume
+- Garmin OAuth tokens are stored in the database
+- OpenRouter API key can be set via environment variable or UI
+- VAPID keys for push notifications are auto-generated
+- Cron endpoints can be secured with `CRON_SECRET` header
 
 ## License
 
