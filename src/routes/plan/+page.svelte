@@ -96,12 +96,14 @@
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
 			<div class="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
 				<div class="flex items-center gap-3">
-					<a href="/">
-						<Button variant="ghost" size="sm">
-							<ArrowLeft class="h-4 w-4" />
-						</Button>
+					<a href="/" class="flex items-center gap-3">
+						<img 
+							src="/icons/android-chrome-192x192.png" 
+							alt="OpenCoach" 
+							class="h-8 w-8 rounded-lg"
+						/>
+						<span class="font-display text-xl font-bold text-white">Your Plan</span>
 					</a>
-					<span class="font-display text-xl font-bold text-white">Your Plan</span>
 				</div>
 				<div class="flex items-center gap-2">
 					<Button onclick={regeneratePlan} variant="outline" size="sm" disabled={regenerating}>

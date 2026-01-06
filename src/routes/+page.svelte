@@ -550,9 +550,11 @@
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
 			<div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
 				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 shadow-lg shadow-accent-900/30">
-						<Zap class="h-5 w-5 text-white" />
-					</div>
+					<img 
+						src="/icons/android-chrome-192x192.png" 
+						alt="OpenCoach" 
+						class="h-10 w-10 rounded-xl shadow-lg shadow-accent-900/30"
+					/>
 					<span class="font-display text-xl font-bold text-white">OpenCoach</span>
 				</div>
 				<div class="flex items-center gap-2">
@@ -575,8 +577,8 @@
 						<Palette class="h-4 w-4" />
 					</Button>
 
-					<a href="/setup">
-						<Button variant="ghost" size="sm" title="Settings & Goals">
+					<a href="/settings">
+						<Button variant="ghost" size="sm" title="Settings">
 							<Settings class="h-4 w-4" />
 						</Button>
 					</a>

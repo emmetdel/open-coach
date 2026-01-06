@@ -1,8 +1,8 @@
 @import 'tailwindcss';
 
 @theme {
-	--font-display: 'Sora', sans-serif;
-	--font-body: 'DM Sans', sans-serif;
+	--font-display: 'Outfit', system-ui, sans-serif;
+	--font-body: 'Nunito', system-ui, sans-serif;
 
 	/* Forest theme (default) */
 	--color-forest-50: #f0fdf4;
@@ -262,3 +262,32 @@
 	.focus\:ring-accent-500\/20:focus { --tw-ring-color: color-mix(in srgb, var(--accent-500) 20%, transparent); }
 }
 
+/* Base typography */
+@layer base {
+	html {
+		font-family: 'Nunito', system-ui, sans-serif;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		/* Bump base size for better readability */
+		font-size: 17px;
+	}
+
+	h1, h2, h3, h4, h5, h6, .font-display {
+		font-family: 'Outfit', system-ui, sans-serif;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+	}
+
+	body {
+		line-height: 1.65;
+	}
+
+	/* Slightly larger text classes */
+	.text-sm {
+		font-size: 0.9rem;
+	}
+
+	.text-xs {
+		font-size: 0.8rem;
+	}
+}

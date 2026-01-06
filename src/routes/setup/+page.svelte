@@ -275,11 +275,11 @@
 		<div class="w-full max-w-lg">
 			<!-- Logo/Header -->
 			<div class="mb-8 text-center">
-				<div class="mb-4 inline-flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/50">
-					<svg class="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-					</svg>
-				</div>
+				<img 
+					src="/icons/android-chrome-192x192.png" 
+					alt="OpenCoach" 
+					class="mx-auto mb-4 h-20 w-20 rounded-2xl shadow-lg shadow-forest-900/50"
+				/>
 				<h1 class="font-display text-3xl font-bold text-white">OpenCoach</h1>
 				<p class="mt-2 text-slate-400">Your AI running companion</p>
 			</div>
