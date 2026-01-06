@@ -1,11 +1,9 @@
 # OpenCoach Dockerfile
+# Using Bun with built-in SQLite (no native modules needed)
 
 FROM oven/bun:1 AS builder
 
 WORKDIR /app
-
-# Install build tools for better-sqlite3 native compilation
-RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package.json bun.lock ./

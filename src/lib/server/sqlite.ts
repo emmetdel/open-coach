@@ -1,6 +1,6 @@
-// SQLite database wrapper using better-sqlite3
+// SQLite database wrapper using Bun's built-in sqlite
 
-import Database, { type Database as DatabaseType } from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -15,10 +15,10 @@ if (!existsSync(DATA_DIR)) {
 }
 
 // Create singleton database instance
-let db: DatabaseType | null = null;
+let db: Database | null = null;
 let migrationsRun = false;
 
-function runMigrations(database: DatabaseType): void {
+function runMigrations(database: Database): void {
 	if (migrationsRun) return;
 	migrationsRun = true;
 	
@@ -52,7 +52,7 @@ function runMigrations(database: DatabaseType): void {
 	
 	// Get already applied migrations
 	const applied = new Set(
-		database.prepare('SELECT name FROM _migrations').all().map((r: { name: string }) => r.name)
+		database.query('SELECT name FROM _migrations').all().map((r: unknown) => (r as { name: string }).name)
 	);
 	
 	// Get migration files
@@ -73,7 +73,7 @@ function runMigrations(database: DatabaseType): void {
 		try {
 			database.exec('BEGIN');
 			database.exec(sql);
-			database.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+			database.query('INSERT INTO _migrations (name) VALUES (?)').run(file);
 			database.exec('COMMIT');
 			appliedCount++;
 		} catch (error) {
@@ -88,13 +88,13 @@ function runMigrations(database: DatabaseType): void {
 	}
 }
 
-export function getDatabase(): DatabaseType {
+export function getDatabase(): Database {
 	if (!db) {
 		db = new Database(DB_PATH);
 		// Enable WAL mode for better concurrent access
-		db.pragma('journal_mode = WAL');
+		db.exec('PRAGMA journal_mode = WAL');
 		// Enable foreign keys
-		db.pragma('foreign_keys = ON');
+		db.exec('PRAGMA foreign_keys = ON');
 		// Run migrations on first connection
 		runMigrations(db);
 	}
@@ -129,14 +129,14 @@ interface PreparedStatement {
 
 // SQLite wrapper class
 class SQLiteWrapper {
-	private db: DatabaseType;
+	private db: Database;
 
 	constructor() {
 		this.db = getDatabase();
 	}
 
 	prepare(sql: string): PreparedStatement {
-		const stmt = this.db.prepare(sql);
+		const query = this.db.query(sql);
 		let boundValues: unknown[] = [];
 
 		const wrapper: PreparedStatement = {
@@ -146,7 +146,7 @@ class SQLiteWrapper {
 			},
 			first: async <T>(colName?: string): Promise<T | null> => {
 				try {
-					const row = stmt.get(...boundValues) as Record<string, unknown> | undefined;
+					const row = query.get(...boundValues) as Record<string, unknown> | null;
 					if (!row) return null;
 					if (colName) {
 						return row[colName] as T;
@@ -159,7 +159,7 @@ class SQLiteWrapper {
 			},
 			all: async <T>(): Promise<QueryResult<T>> => {
 				try {
-					const rows = stmt.all(...boundValues) as T[];
+					const rows = query.all(...boundValues) as T[];
 					return {
 						results: rows,
 						success: true,
@@ -172,13 +172,16 @@ class SQLiteWrapper {
 			},
 			run: async (): Promise<QueryResult<unknown>> => {
 				try {
-					const info = stmt.run(...boundValues);
+					query.run(...boundValues);
+					// bun:sqlite doesn't return changes/lastInsertRowid from run()
+					// We need to query it separately if needed
+					const changesResult = this.db.query('SELECT changes() as changes, last_insert_rowid() as lastId').get() as { changes: number; lastId: number } | null;
 					return {
 						results: [],
 						success: true,
 						meta: {
-							changes: info.changes,
-							last_row_id: Number(info.lastInsertRowid)
+							changes: changesResult?.changes ?? 0,
+							last_row_id: changesResult?.lastId ?? 0
 						}
 					};
 				} catch (err) {

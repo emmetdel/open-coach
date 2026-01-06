@@ -1,9 +1,9 @@
-// Database migration script for local SQLite
+// Database migration script using Bun's built-in sqlite
 // Run with: bun scripts/migrate.ts
 
 import { readFileSync, readdirSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import Database from 'better-sqlite3';
+import { Database } from 'bun:sqlite';
 
 const DATA_DIR = process.env.DATA_DIR || './data';
 const DB_PATH = process.env.DATABASE_PATH || join(DATA_DIR, 'opencoach.db');
@@ -17,7 +17,7 @@ if (!existsSync(DATA_DIR)) {
 console.log(`Migrating database at: ${DB_PATH}`);
 
 const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
+db.exec('PRAGMA journal_mode = WAL');
 
 // Create migrations table if not exists
 db.exec(`
@@ -30,7 +30,7 @@ db.exec(`
 
 // Get already applied migrations
 const applied = new Set(
-	db.prepare('SELECT name FROM _migrations').all().map((r: { name: string }) => r.name)
+	db.query('SELECT name FROM _migrations').all().map((r: unknown) => (r as { name: string }).name)
 );
 
 // Get migration files
@@ -56,7 +56,7 @@ for (const file of migrationFiles) {
 		// Run migration in a transaction
 		db.exec('BEGIN');
 		db.exec(sql);
-		db.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
+		db.query('INSERT INTO _migrations (name) VALUES (?)').run(file);
 		db.exec('COMMIT');
 		console.log(`  ✓ ${file} applied`);
 		appliedCount++;
