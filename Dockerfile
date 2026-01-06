@@ -13,13 +13,16 @@ RUN apk add --no-cache python3 make g++
 COPY package.json bun.lock* ./
 
 # Install all dependencies (including dev)
-RUN bun install --frozen-lockfile
+RUN bun install
 
 # Copy source code
 COPY . .
 
 # Build the application
 RUN bun run build
+
+# Prune dev dependencies for smaller production image
+RUN rm -rf node_modules && bun install --production
 
 # ===== Production Stage =====
 FROM oven/bun:1-alpine AS production
@@ -29,9 +32,11 @@ WORKDIR /app
 # Install runtime dependencies for better-sqlite3
 RUN apk add --no-cache python3 make g++
 
-# Copy package files and install production dependencies only
-COPY package.json bun.lock* ./
-RUN bun install --production --frozen-lockfile
+# Copy package.json for reference
+COPY package.json ./
+
+# Copy node_modules from builder (already pruned to production)
+COPY --from=builder /app/node_modules ./node_modules
 
 # Copy built application
 COPY --from=builder /app/build ./build
