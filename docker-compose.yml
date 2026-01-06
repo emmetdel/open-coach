@@ -1,17 +1,15 @@
 # OpenCoach Docker Compose
-# Two services: main web app + auth server
+# Single service with built-in Garmin authentication
 
 services:
-  # Main SvelteKit application
   opencoach:
-    build: ./web
+    build: .
     container_name: opencoach
     restart: unless-stopped
     ports:
       - "${PORT:-3000}:3000"
     volumes:
       - opencoach-data:/app/data
-      - garth-tokens:/root/.garth
     environment:
       - NODE_ENV=production
       - PORT=3000
@@ -20,13 +18,11 @@ services:
       - DATABASE_PATH=/app/data/opencoach.db
       - ENABLE_CRON=${ENABLE_CRON:-true}
       - BASE_URL=${BASE_URL:-http://localhost:3000}
-      - AUTH_SERVER_URL=http://opencoach-auth:5050
       - CRON_SECRET=${CRON_SECRET:-}
+      - GARMIN_EMAIL=${GARMIN_EMAIL:-}
+      - GARMIN_PASSWORD=${GARMIN_PASSWORD:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - OPENROUTER_MODEL=${OPENROUTER_MODEL:-}
-    depends_on:
-      opencoach-auth:
-        condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/"]
       interval: 30s
@@ -34,28 +30,5 @@ services:
       retries: 3
       start_period: 10s
 
-  # Garmin Authentication Server (handles MFA)
-  opencoach-auth:
-    build: ./auth-server
-    container_name: opencoach-auth
-    restart: unless-stopped
-    ports:
-      - "${AUTH_PORT:-5050}:5050"
-    volumes:
-      - garth-tokens:/root/.garth
-      - opencoach-data:/app/data
-    environment:
-      - GARMIN_EMAIL=${GARMIN_EMAIL:-}
-      - GARMIN_PASSWORD=${GARMIN_PASSWORD:-}
-      - GARTH_DIR=/root/.garth
-      - TOKEN_FILE=/app/data/garmin-tokens.json
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:5050/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 5s
-
 volumes:
   opencoach-data:
-  garth-tokens:

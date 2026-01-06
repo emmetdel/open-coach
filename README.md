@@ -7,7 +7,7 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 ## Features
 
 - **Garmin Sync**: Automatically syncs your running activities from Garmin Connect
-- **AI Coach**: Get personalized, empathetic feedback on every run (powered by OpenRouter - choose your model!)
+- **AI Coach**: Get personalized, empathetic feedback on every run (powered by OpenRouter)
 - **Model Selection**: Pick from Claude, GPT-4, Gemini, Llama, and more via OpenRouter
 - **Consistency Tracking**: Focus on showing up, not speed or distance
 - **Push Notifications**: Get instant browser notifications when runs sync
@@ -16,20 +16,36 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 ## Tech Stack
 
 - **Framework**: SvelteKit (TypeScript)
-- **Deployment**: Docker (self-hosted on Unraid, NAS, or any server)
+- **Deployment**: Docker or standalone Node.js
 - **Database**: SQLite (via better-sqlite3)
 - **Styling**: Tailwind CSS v4 + Custom Components
 - **AI**: OpenRouter (access to Claude, GPT-4, Gemini, Llama, DeepSeek, and more)
-- **Garmin**: Garth OAuth2 tokens
+- **Garmin**: garmin-connect npm package (native TypeScript)
 - **Notifications**: Web Push API
 
-## Quick Start with Docker
+## Quick Start
 
-The Docker setup includes **two containers**:
-1. **opencoach** - The main SvelteKit web application
-2. **garmin-auth** - Python server for Garmin authentication with MFA support
+### Option 1: Local Development (Recommended for getting started)
 
-### Using Docker Compose (Recommended)
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/yourusername/open-coach.git
+   cd open-coach
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Start the dev server (migrations run automatically):
+   ```bash
+   npm run dev
+   ```
+
+4. Open http://localhost:5173 and complete the setup wizard
+
+### Option 2: Docker
 
 1. Clone the repository:
    ```bash
@@ -42,98 +58,42 @@ The Docker setup includes **two containers**:
    cp env.example .env
    ```
 
-3. Edit `.env` with your Garmin credentials:
+3. Edit `.env` with your credentials (optional - can also set in the UI):
    ```bash
    GARMIN_EMAIL=your-email@example.com
    GARMIN_PASSWORD=your-garmin-password
+   OPENROUTER_API_KEY=your-api-key
    ```
 
-4. Start both containers:
+4. Start the container:
    ```bash
    docker compose up -d
    ```
 
 5. Open http://localhost:3000 and complete the setup wizard
 
-### Garmin Authentication Flow
-
-The auth server handles Garmin's MFA (2-factor authentication):
-
-1. When you first sync or tokens expire, OpenCoach calls the auth server
-2. If MFA is required, a popup appears in the web UI asking for your code
-3. Enter the code from your authenticator app
-4. Tokens are saved and shared between containers
-
-**Auth Server Endpoints** (http://localhost:5050):
-- `GET /health` - Health check
-- `GET /auth/status` - Check if authenticated
-- `POST /auth/auto-login` - Login with env credentials
-- `POST /auth/mfa` - Submit MFA code
-- `POST /auth/export` - Export current tokens
-
-### Unraid Deployment
-
-For Unraid, you'll need to add both containers:
-
-**Container 1: opencoach**
-- **Container Port**: 3000
-- **Host Path for /app/data**: `/mnt/user/appdata/opencoach`
-- **Host Path for /root/.garth**: `/mnt/user/appdata/opencoach/garth`
-
-**Container 2: garmin-auth**
-- **Container Port**: 5050
-- **Host Path for /root/.garth**: `/mnt/user/appdata/opencoach/garth` (same as above)
-- **Environment Variables**: `GARMIN_EMAIL`, `GARMIN_PASSWORD`
-
-### Manual Authentication (Alternative)
-
-If you prefer to authenticate manually without the auth server:
-
-1. Run the Python auth script locally:
-   ```bash
-   cd scripts
-   python garmin-auth.py
-   ```
-
-2. Copy the generated `garmin-tokens.json` to the container:
-   ```bash
-   docker cp garmin-tokens.json opencoach:/app/data/
-   ```
-
-3. Import tokens via the API:
-   ```bash
-   curl -X POST http://localhost:3000/api/garmin/tokens \
-     -H "Content-Type: application/json" \
-     -d @garmin-tokens.json
-   ```
-
-## Local Development
-
-1. Install dependencies:
-   ```bash
-   cd web
-   npm install
-   ```
-
-2. Run database migrations:
-   ```bash
-   npm run db:migrate
-   ```
-
-3. Start the dev server:
-   ```bash
-   npm run dev
-   ```
-
-4. Open http://localhost:5173 and complete the setup wizard
-
 ## Building for Production
 
 ```bash
-cd web
 npm run build
 npm start
 ```
+
+Or with Docker:
+
+```bash
+docker compose up -d --build
+```
+
+## Garmin Authentication
+
+OpenCoach uses the `garmin-connect` npm package for direct Garmin Connect API authentication:
+
+1. **No 2FA accounts only**: Works best with Garmin accounts that have 2FA disabled
+2. **Enter credentials in the UI**: The setup wizard prompts for your Garmin email/password
+3. **Automatic token refresh**: Tokens are refreshed automatically via cron job
+
+**Note**: If you have 2FA enabled on your Garmin account, you'll need to disable it or create a secondary account without 2FA.
 
 ## Supported AI Models
 
@@ -154,28 +114,17 @@ OpenCoach uses OpenRouter, giving you access to multiple AI providers:
 
 ```
 open-coach/
-├── web/                          # SvelteKit web application
-│   ├── src/
-│   │   ├── lib/server/           # Server logic (Garmin, AI, DB)
-│   │   ├── routes/               # Pages and API endpoints
-│   │   └── hooks.server.ts       # DB injection, cron startup
-│   ├── migrations/               # SQLite schema migrations
-│   ├── scripts/migrate.ts        # Database migration script
-│   ├── static/                   # Static assets
-│   ├── Dockerfile
-│   └── package.json
-│
-├── auth-server/                  # Garmin Auth Service (Python)
-│   ├── server.py                 # Flask server with MFA support
-│   ├── pyproject.toml            # Python dependencies
-│   └── Dockerfile
-│
-├── scripts/                      # Dev utilities (not deployed)
-│   ├── garmin-auth.py            # Manual Garmin auth CLI
-│   └── garmin-sync.py            # Manual activity sync
-│
-├── docker-compose.yml            # Orchestrates both services
-├── env.example                   # Environment template
+├── src/
+│   ├── lib/server/           # Server logic (Garmin, AI, DB)
+│   ├── routes/               # Pages and API endpoints
+│   └── hooks.server.ts       # DB injection, cron startup
+├── migrations/               # SQLite schema migrations
+├── scripts/migrate.ts        # Database migration script
+├── static/                   # Static assets
+├── docker-compose.yml        # Docker orchestration
+├── Dockerfile
+├── package.json
+├── env.example               # Environment template
 └── README.md
 ```
 
@@ -185,7 +134,7 @@ OpenCoach uses node-cron for background tasks:
 
 | Schedule | Job | Description |
 |----------|-----|-------------|
-| Every 30 min | Token Refresh | Proactively refreshes Garmin OAuth tokens |
+| Every 30 min | Token Refresh | Refreshes Garmin session |
 | Every 4 hours | Sync Loop | Polls Garmin for new activities |
 | Daily 7 AM | Morning Reminder | Sends run reminders for today |
 | Daily 8 PM | Evening Reminder | Sends preparation reminders for tomorrow |
@@ -202,13 +151,15 @@ OpenCoach uses node-cron for background tasks:
 | `ENABLE_CRON` | true | Enable scheduled jobs |
 | `BASE_URL` | http://localhost:3000 | Base URL for cron callbacks |
 | `CRON_SECRET` | - | Secret for securing cron endpoints |
+| `GARMIN_EMAIL` | - | Garmin email (optional, can set in UI) |
+| `GARMIN_PASSWORD` | - | Garmin password (optional, can set in UI) |
 | `OPENROUTER_API_KEY` | - | OpenRouter API key (optional, can set in UI) |
 | `OPENROUTER_MODEL` | anthropic/claude-3.5-haiku | Default AI model |
 
 ## Security
 
 - SQLite database is stored in a persistent volume
-- Garmin OAuth tokens are stored in the database
+- Garmin session tokens are stored in the database
 - OpenRouter API key can be set via environment variable or UI
 - VAPID keys for push notifications are auto-generated
 - Cron endpoints can be secured with `CRON_SECRET` header
