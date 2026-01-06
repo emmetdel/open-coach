@@ -1,8 +1,11 @@
 # OpenCoach Dockerfile
 
-FROM oven/bun:1-debian AS builder
+FROM oven/bun:1 AS builder
 
 WORKDIR /app
+
+# Install build tools for better-sqlite3 native compilation
+RUN apt-get update && apt-get install -y python3 build-essential && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies
 COPY package.json bun.lock ./
@@ -13,7 +16,7 @@ COPY . .
 RUN bun run build
 
 # ===== Production =====
-FROM oven/bun:1-debian-slim
+FROM oven/bun:1-slim
 
 WORKDIR /app
 
