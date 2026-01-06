@@ -449,13 +449,16 @@
 
 	<!-- Theme Picker Modal -->
 	{#if showThemePicker}
-		<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-		<div class="fixed inset-0 z-[200]" onclick={() => showThemePicker = false}>
-			<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
-			<div 
-				class="fixed right-4 top-16 w-48 rounded-xl border border-slate-700/50 bg-slate-850 p-2 shadow-2xl"
-				onclick={(e) => e.stopPropagation()}
-			>
+		<button 
+			type="button"
+			class="fixed inset-0 z-[200] cursor-default bg-transparent" 
+			onclick={() => showThemePicker = false}
+			aria-label="Close theme picker"
+		></button>
+		<div 
+			class="fixed right-4 top-16 z-[201] w-48 rounded-xl border border-slate-700/50 bg-slate-850 p-2 shadow-2xl"
+			role="menu"
+		>
 				<!-- Light/Dark Toggle -->
 				<button
 					onclick={toggleDarkMode}
@@ -489,7 +492,6 @@
 						{/if}
 					</button>
 				{/each}
-			</div>
 		</div>
 	{/if}
 

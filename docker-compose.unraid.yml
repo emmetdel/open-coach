@@ -17,7 +17,7 @@
 
 services:
   opencoach:
-    image: ghcr.io/YOUR_GITHUB_USERNAME/open-coach:latest
+    image: ghcr.io/emmetdel/open-coach:latest
     container_name: opencoach
     restart: unless-stopped
     ports:
