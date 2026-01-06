@@ -11,6 +11,8 @@ build/
 # Data directories (SQLite, tokens)
 data/
 *.db
+*.db-shm
+*.db-wal
 garmin-tokens.json
 
 # OS
@@ -29,3 +31,7 @@ vite.config.ts.timestamp-*
 
 # Package locks (only keep the root one)
 web/
+
+# Debug/research files
+scheduling.txt
+*.log
