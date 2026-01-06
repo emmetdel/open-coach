@@ -29,7 +29,7 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/yourusername/open-coach.git
+   git clone https://github.com/emmetdel/open-coach.git
    cd open-coach
    ```
 
