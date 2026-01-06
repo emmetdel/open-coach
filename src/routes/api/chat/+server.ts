@@ -2,6 +2,7 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getSetting, SETTING_KEYS, getRecentRuns, getUpcomingPlans } from '$lib/server/db';
 import { getHealthSnapshot } from '$lib/server/garmin';
+import { getChatSystemPrompt } from '$lib/prompts';
 
 interface ChatMessage {
 	role: 'user' | 'assistant';
@@ -105,23 +106,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 		const context = contextParts.join('\n\n');
 
-		// Build messages array
-		const systemPrompt = `You are a friendly, supportive running coach assistant for OpenCoach. 
-You help users understand their training, answer questions about their runs, and provide encouragement.
-
-${context ? `Here's what you know about this user:\n${context}` : 'No training data available yet.'}
-
-Guidelines:
-- Be concise but helpful (2-3 sentences unless more detail is needed)
-- Focus on encouragement and practical advice
-- Use health data to personalize recommendations:
-  - Low HRV or poor sleep → suggest easier workout or extra rest
-  - Low Body Battery (<30) → recommend recovery day
-  - Elevated resting HR (+5bpm above normal) → sign of stress/overtraining
-  - Good recovery metrics → encourage pushing a bit harder
-- If asked to modify the plan, explain what they can do (go to /setup to change days, regenerate plan)
-- Use a conversational, supportive tone
-- You can use emoji sparingly for encouragement 🏃‍♂️`;
+		// Build messages array using centralized prompts
+		const systemPrompt = getChatSystemPrompt(context);
 
 		const messages = [
 			{ role: 'system', content: systemPrompt },

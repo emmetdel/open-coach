@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import GarminAuthModal from '$lib/components/GarminAuthModal.svelte';
-	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Settings, Flame, Trophy, Lightbulb, Target, Palette, Sun, Moon, Heart, Battery, BedDouble } from 'lucide-svelte';
+	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Settings, Flame, Trophy, Lightbulb, Target, Palette, Sun, Moon, Heart, Battery, BedDouble, AlertTriangle, ArrowRight, Footprints, Play, Clock, CheckCircle2, Watch, Trash2, Pencil, MoreVertical } from 'lucide-svelte';
 	import type { PageData } from './$types';
 	import { onMount } from 'svelte';
 
@@ -67,6 +67,198 @@
 
 	// Plan generation
 	let generatingPlan = $state(false);
+
+	// Recovery rescheduling
+	let showRescheduleModal = $state(false);
+	let rescheduling = $state(false);
+	let rescheduleMessage = $state('');
+	let alertDismissed = $state(false);
+
+	// Pre-run "I'm going" ritual
+	let showPreRunModal = $state(false);
+	let preRunCountdown = $state<number | null>(null);
+	let countdownInterval: ReturnType<typeof setInterval> | null = null;
+
+	function startGetReadyTimer() {
+		preRunCountdown = 10 * 60; // 10 minutes in seconds
+		countdownInterval = setInterval(() => {
+			if (preRunCountdown !== null && preRunCountdown > 0) {
+				preRunCountdown--;
+			} else if (countdownInterval) {
+				clearInterval(countdownInterval);
+				countdownInterval = null;
+			}
+		}, 1000);
+	}
+
+	function stopTimer() {
+		if (countdownInterval) {
+			clearInterval(countdownInterval);
+			countdownInterval = null;
+		}
+		preRunCountdown = null;
+	}
+
+	function formatCountdown(seconds: number): string {
+		const mins = Math.floor(seconds / 60);
+		const secs = seconds % 60;
+		return `${mins}:${secs.toString().padStart(2, '0')}`;
+	}
+
+	// Pre-run motivational messages (from prompts.ts concepts)
+	const preRunMessages: Record<string, string[]> = {
+		Easy: [
+			"Easy runs build your aerobic engine. Keep it conversational! 🗣️",
+			"Today's about joy. No pressure, just flow.",
+		],
+		'Walk-Run': [
+			"Walk-run is how every great runner started. You're on the path! 🚶‍♂️🏃",
+			"Walking is not giving up - it's smart training.",
+		],
+		Long: [
+			"Long runs are mental as much as physical. You've got this! 💪",
+			"Start slower than you think. The first mile is always hardest.",
+		],
+		Interval: [
+			"Speed work today! Push hard, recover fully. ⚡",
+			"Intervals make you faster. Embrace the discomfort.",
+		]
+	};
+
+	function getPreRunMessage(type: string): string {
+		const messages = preRunMessages[type] || preRunMessages['Easy'];
+		return messages[Math.floor(Math.random() * messages.length)];
+	}
+
+	// Run edit/delete
+	let showEditRunModal = $state(false);
+	let showDeleteConfirm = $state(false);
+	let selectedRunId = $state<string | null>(null);
+	let selectedRun = $state<typeof data.runs[0] | null>(null);
+	let editingRun = $state(false);
+	let deletingRun = $state(false);
+	let runActionMessage = $state('');
+
+	// Edit form state
+	let editDate = $state('');
+	let editDistance = $state('');
+	let editDuration = $state('');
+	let editHr = $state('');
+
+	function openEditModal(run: typeof data.runs[0]) {
+		selectedRun = run;
+		selectedRunId = run.garmin_activity_id;
+		// Parse the existing values
+		editDate = run.date.split('T')[0];
+		// Parse distance from "5.2 km" format
+		editDistance = run.distance.replace(/[^\d.]/g, '');
+		// Parse duration from "32:15" format to minutes
+		const [mins, secs] = run.duration.split(':').map(Number);
+		editDuration = String(mins + (secs || 0) / 60);
+		editHr = run.avg_hr ? String(run.avg_hr) : '';
+		showEditRunModal = true;
+	}
+
+	function openDeleteConfirm(run: typeof data.runs[0]) {
+		selectedRun = run;
+		selectedRunId = run.garmin_activity_id;
+		showDeleteConfirm = true;
+	}
+
+	async function saveRunEdit() {
+		if (!selectedRunId) return;
+		
+		editingRun = true;
+		runActionMessage = '';
+
+		try {
+			const res = await fetch(`/api/runs/${encodeURIComponent(selectedRunId)}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					date: editDate + 'T12:00:00',
+					distance_km: parseFloat(editDistance),
+					duration_minutes: parseFloat(editDuration),
+					avg_hr: editHr ? parseInt(editHr) : null
+				})
+			});
+
+			const result = await res.json();
+
+			if (result.success) {
+				runActionMessage = 'Run updated!';
+				showEditRunModal = false;
+				setTimeout(() => window.location.reload(), 1000);
+			} else {
+				runActionMessage = result.error || 'Failed to update run';
+			}
+		} catch (err) {
+			runActionMessage = 'Network error';
+		} finally {
+			editingRun = false;
+		}
+	}
+
+	async function deleteRun() {
+		if (!selectedRunId) return;
+		
+		deletingRun = true;
+		runActionMessage = '';
+
+		try {
+			const res = await fetch(`/api/runs/${encodeURIComponent(selectedRunId)}`, {
+				method: 'DELETE'
+			});
+
+			const result = await res.json();
+
+			if (result.success) {
+				runActionMessage = 'Run deleted';
+				showDeleteConfirm = false;
+				setTimeout(() => window.location.reload(), 1000);
+			} else {
+				runActionMessage = result.error || 'Failed to delete run';
+			}
+		} catch (err) {
+			runActionMessage = 'Network error';
+		} finally {
+			deletingRun = false;
+		}
+	}
+
+	async function handleReschedule(action: 'move_tomorrow' | 'swap_next' | 'convert_walk' | 'skip') {
+		if (!data.recoveryAlert?.todaysRunId) return;
+		
+		rescheduling = true;
+		rescheduleMessage = '';
+
+		try {
+			const res = await fetch('/api/plan/reschedule', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					planId: data.recoveryAlert.todaysRunId,
+					action
+				})
+			});
+
+			const result = await res.json();
+
+			if (result.success) {
+				rescheduleMessage = result.message;
+				showRescheduleModal = false;
+				alertDismissed = true;
+				// Reload after a short delay to show the message
+				setTimeout(() => window.location.reload(), 2000);
+			} else {
+				rescheduleMessage = result.error || 'Failed to reschedule';
+			}
+		} catch (err) {
+			rescheduleMessage = 'Network error';
+		} finally {
+			rescheduling = false;
+		}
+	}
 
 	// AI Coach Chat
 	interface ChatMessage {
@@ -393,9 +585,282 @@
 		</header>
 
 		<main class="mx-auto max-w-6xl px-6 py-8">
-			{#if syncMessage}
+			{#if syncMessage || rescheduleMessage}
 				<div class="mb-6 rounded-xl bg-accent-500/10 px-4 py-3 text-sm text-accent-400">
-					{syncMessage}
+					{syncMessage || rescheduleMessage}
+				</div>
+			{/if}
+
+			<!-- Recovery Alert -->
+			{#if data.recoveryAlert && !alertDismissed}
+				<div class="mb-6 rounded-2xl border {data.recoveryAlert.type === 'low' ? 'border-red-500/30 bg-red-900/20' : 'border-amber-500/30 bg-amber-900/20'} p-4">
+					<div class="flex items-start gap-4">
+						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl {data.recoveryAlert.type === 'low' ? 'bg-red-500/20' : 'bg-amber-500/20'}">
+							<AlertTriangle class="h-5 w-5 {data.recoveryAlert.type === 'low' ? 'text-red-400' : 'text-amber-400'}" />
+						</div>
+						<div class="flex-1">
+							<h3 class="font-display font-semibold {data.recoveryAlert.type === 'low' ? 'text-red-300' : 'text-amber-300'}">
+								{data.recoveryAlert.type === 'low' ? 'Low Recovery Detected' : 'Moderate Recovery'}
+							</h3>
+							<p class="mt-1 text-sm text-slate-300">{data.recoveryAlert.message}</p>
+							
+							<div class="mt-4 flex flex-wrap gap-2">
+								{#if data.recoveryAlert.suggestion === 'reschedule'}
+									<Button onclick={() => showRescheduleModal = true} size="sm" class="bg-red-600 hover:bg-red-700">
+										<Calendar class="h-4 w-4" />
+										Reschedule Options
+									</Button>
+								{:else}
+									<Button onclick={() => showRescheduleModal = true} size="sm" variant="outline" class="border-amber-500/50 text-amber-300 hover:bg-amber-500/10">
+										<Calendar class="h-4 w-4" />
+										Adjust Today's Run
+									</Button>
+								{/if}
+								<Button onclick={() => alertDismissed = true} size="sm" variant="ghost" class="text-slate-400">
+									I'll push through
+								</Button>
+							</div>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Reschedule Modal -->
+			{#if showRescheduleModal}
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+					<div class="mx-4 w-full max-w-md rounded-2xl border border-slate-700/50 bg-slate-850 p-6 shadow-2xl">
+						<div class="mb-6 flex items-center justify-between">
+							<h2 class="font-display text-xl font-bold text-white">Adjust Today's Run</h2>
+							<button onclick={() => showRescheduleModal = false} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+								<X class="h-5 w-5" />
+							</button>
+						</div>
+
+						<p class="mb-6 text-sm text-slate-400">
+							Your body needs rest. Choose how you'd like to handle today's {data.recoveryAlert?.todaysRunType || 'run'}:
+						</p>
+
+						<div class="space-y-3">
+							<!-- Move to Tomorrow -->
+							<button
+								onclick={() => handleReschedule('move_tomorrow')}
+								disabled={rescheduling}
+								class="flex w-full items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 text-left transition-colors hover:border-blue-500/50 hover:bg-blue-900/20 disabled:opacity-50"
+							>
+								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/20">
+									<ArrowRight class="h-5 w-5 text-blue-400" />
+								</div>
+								<div>
+									<p class="font-medium text-white">Move to Tomorrow</p>
+									<p class="text-sm text-slate-400">Swap with tomorrow's workout if there is one</p>
+								</div>
+							</button>
+
+							<!-- Convert to Walk -->
+							<button
+								onclick={() => handleReschedule('convert_walk')}
+								disabled={rescheduling}
+								class="flex w-full items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 text-left transition-colors hover:border-green-500/50 hover:bg-green-900/20 disabled:opacity-50"
+							>
+								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/20">
+									<Footprints class="h-5 w-5 text-green-400" />
+								</div>
+								<div>
+									<p class="font-medium text-white">Convert to Walk</p>
+									<p class="text-sm text-slate-400">20-minute easy walk - movement without stress</p>
+								</div>
+							</button>
+
+							<!-- Skip -->
+							<button
+								onclick={() => handleReschedule('skip')}
+								disabled={rescheduling}
+								class="flex w-full items-center gap-4 rounded-xl border border-slate-700/50 bg-slate-800/50 p-4 text-left transition-colors hover:border-slate-600 hover:bg-slate-800 disabled:opacity-50"
+							>
+								<div class="flex h-10 w-10 items-center justify-center rounded-lg bg-slate-700/50">
+									<X class="h-5 w-5 text-slate-400" />
+								</div>
+								<div>
+									<p class="font-medium text-white">Skip Today</p>
+									<p class="text-sm text-slate-400">Rest is training too - take the day off</p>
+								</div>
+							</button>
+						</div>
+
+						{#if rescheduling}
+							<p class="mt-4 text-center text-sm text-slate-400">
+								<RefreshCw class="inline h-4 w-4 animate-spin" /> Updating...
+							</p>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Pre-Run "I'm Going" Modal -->
+			{#if showPreRunModal && data.todaysRun}
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+					<div class="mx-4 w-full max-w-lg rounded-2xl border border-forest-500/30 bg-gradient-to-br from-forest-900/40 to-slate-900 p-6 shadow-2xl">
+						<div class="mb-4 flex items-center justify-between">
+							<h2 class="font-display text-2xl font-bold text-white">Let's Go! 🏃</h2>
+							<button onclick={() => { showPreRunModal = false; stopTimer(); }} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+								<X class="h-5 w-5" />
+							</button>
+						</div>
+
+						<!-- Countdown Timer (if active) -->
+						{#if preRunCountdown !== null}
+							<div class="mb-6 rounded-2xl bg-forest-500/20 p-6 text-center">
+								<p class="text-sm font-medium text-forest-300 mb-2">Get Ready Timer</p>
+								<p class="font-display text-5xl font-bold text-forest-400">{formatCountdown(preRunCountdown)}</p>
+								<p class="text-sm text-forest-300/70 mt-2">Just get dressed. That's the goal.</p>
+								<Button onclick={stopTimer} variant="ghost" size="sm" class="mt-3 text-forest-400">
+									Cancel timer
+								</Button>
+							</div>
+						{:else}
+							<!-- Workout Summary -->
+							<div class="mb-6 rounded-xl bg-slate-800/50 p-4">
+								<div class="flex items-center gap-4">
+									<div class="flex h-14 w-14 items-center justify-center rounded-xl bg-forest-500/20">
+										<Activity class="h-7 w-7 text-forest-400" />
+									</div>
+									<div>
+										<p class="text-sm text-slate-400">Today's Workout</p>
+										<p class="font-display text-xl font-bold text-white">{data.todaysRun.type}</p>
+										<p class="text-lg text-forest-400">{data.todaysRun.distance}</p>
+									</div>
+								</div>
+								<p class="mt-3 text-sm text-slate-300">{data.todaysRun.description}</p>
+							</div>
+
+							<!-- Motivational Message -->
+							<div class="mb-6 rounded-xl bg-amber-500/10 border border-amber-500/20 p-4">
+								<div class="flex gap-3">
+									<Lightbulb class="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+									<p class="text-amber-200">{getPreRunMessage(data.todaysRun.type)}</p>
+								</div>
+							</div>
+
+							<!-- Quick Checklist -->
+							<div class="mb-6 space-y-2">
+								<p class="text-sm font-medium text-slate-400 mb-3">Quick Checklist</p>
+								<div class="flex items-center gap-3 text-slate-300">
+									<CheckCircle2 class="h-4 w-4 text-forest-400" />
+									<span class="text-sm">Shoes on</span>
+								</div>
+								<div class="flex items-center gap-3 text-slate-300">
+									<CheckCircle2 class="h-4 w-4 text-forest-400" />
+									<span class="text-sm">Phone charged (for safety)</span>
+								</div>
+								<div class="flex items-center gap-3 text-slate-300">
+									<CheckCircle2 class="h-4 w-4 text-forest-400" />
+									<span class="text-sm">Water ready for after</span>
+								</div>
+								{#if data.todaysRun.garminSynced}
+									<div class="flex items-center gap-3 text-forest-300">
+										<Watch class="h-4 w-4 text-forest-400" />
+										<span class="text-sm">Workout is on your watch! ✓</span>
+									</div>
+								{/if}
+							</div>
+
+							<!-- Action Buttons -->
+							<div class="flex gap-3">
+								<Button onclick={startGetReadyTimer} variant="outline" class="flex-1 border-forest-500/50 text-forest-300">
+									<Clock class="h-4 w-4" />
+									10 min timer
+								</Button>
+								<Button onclick={() => showPreRunModal = false} class="flex-1 bg-forest-600 hover:bg-forest-700">
+									<Play class="h-4 w-4" />
+									I'm ready!
+								</Button>
+							</div>
+						{/if}
+					</div>
+				</div>
+			{/if}
+
+			<!-- Edit Run Modal -->
+			{#if showEditRunModal && selectedRun}
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+					<div class="mx-4 w-full max-w-md rounded-2xl border border-slate-700/50 bg-slate-850 p-6 shadow-2xl">
+						<div class="mb-6 flex items-center justify-between">
+							<h2 class="font-display text-xl font-bold text-white">Edit Run</h2>
+							<button onclick={() => showEditRunModal = false} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+								<X class="h-5 w-5" />
+							</button>
+						</div>
+
+						<form onsubmit={(e) => { e.preventDefault(); saveRunEdit(); }} class="space-y-4">
+							<div class="space-y-2">
+								<Label for="edit-date">Date</Label>
+								<Input id="edit-date" type="date" bind:value={editDate} />
+							</div>
+
+							<div class="grid grid-cols-2 gap-4">
+								<div class="space-y-2">
+									<Label for="edit-distance">Distance (km)</Label>
+									<Input id="edit-distance" type="number" step="0.1" bind:value={editDistance} />
+								</div>
+								<div class="space-y-2">
+									<Label for="edit-duration">Duration (min)</Label>
+									<Input id="edit-duration" type="number" step="1" bind:value={editDuration} />
+								</div>
+							</div>
+
+							<div class="space-y-2">
+								<Label for="edit-hr">Avg Heart Rate (optional)</Label>
+								<Input id="edit-hr" type="number" placeholder="145" bind:value={editHr} />
+							</div>
+
+							{#if runActionMessage}
+								<p class="text-sm text-amber-400">{runActionMessage}</p>
+							{/if}
+
+							<div class="flex gap-3 pt-4">
+								<Button type="button" variant="outline" onclick={() => showEditRunModal = false} class="flex-1">
+									Cancel
+								</Button>
+								<Button type="submit" class="flex-1" disabled={editingRun}>
+									{editingRun ? 'Saving...' : 'Save Changes'}
+								</Button>
+							</div>
+						</form>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Delete Confirmation Modal -->
+			{#if showDeleteConfirm && selectedRun}
+				<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+					<div class="mx-4 w-full max-w-sm rounded-2xl border border-red-500/30 bg-slate-850 p-6 shadow-2xl">
+						<div class="mb-4 flex items-center gap-3">
+							<div class="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/20">
+								<Trash2 class="h-5 w-5 text-red-400" />
+							</div>
+							<h2 class="font-display text-xl font-bold text-white">Delete Run?</h2>
+						</div>
+
+						<p class="mb-2 text-slate-300">
+							Are you sure you want to delete this run?
+						</p>
+						<p class="mb-6 text-sm text-slate-400">
+							{selectedRun.dateFormatted} • {selectedRun.distance} • {selectedRun.duration}
+						</p>
+
+						{#if runActionMessage}
+							<p class="mb-4 text-sm text-amber-400">{runActionMessage}</p>
+						{/if}
+
+						<div class="flex gap-3">
+							<Button variant="outline" onclick={() => showDeleteConfirm = false} class="flex-1">
+								Cancel
+							</Button>
+							<Button onclick={deleteRun} class="flex-1 bg-red-600 hover:bg-red-700" disabled={deletingRun}>
+								{deletingRun ? 'Deleting...' : 'Delete'}
+							</Button>
+						</div>
+					</div>
 				</div>
 			{/if}
 
@@ -475,7 +940,9 @@
 					<CardContent class="p-6">
 						<div class="flex items-center justify-between">
 							<div>
-								<p class="text-sm font-medium uppercase tracking-wider text-accent-400">Next Run</p>
+								<p class="text-sm font-medium uppercase tracking-wider text-accent-400">
+									{data.todaysRun ? "Today's Run" : 'Next Run'}
+								</p>
 								<h2 class="mt-1 font-display text-2xl font-bold text-white">{data.nextRun.dateFormatted}</h2>
 								<div class="mt-2 flex items-center gap-3">
 									<span class="rounded-lg bg-accent-500/20 px-3 py-1 text-sm font-medium text-accent-300">
@@ -484,11 +951,31 @@
 									<span class="text-lg font-semibold text-slate-200">{data.nextRun.distance}</span>
 								</div>
 								<p class="mt-2 text-sm text-slate-400">{data.nextRun.description}</p>
+								
+								<!-- "I'm Going" Button (only shows for today's run) -->
+								{#if data.todaysRun}
+									<Button 
+										onclick={() => showPreRunModal = true} 
+										class="mt-4 bg-forest-600 hover:bg-forest-700 shadow-lg shadow-forest-900/30"
+									>
+										<Play class="h-4 w-4" />
+										I'm Going! 🏃
+									</Button>
+								{/if}
 							</div>
 							<div class="hidden sm:block">
-								<div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-forest-500/20">
-									<Calendar class="h-10 w-10 text-forest-400" />
-								</div>
+								{#if data.todaysRun}
+									<button 
+										onclick={() => showPreRunModal = true}
+										class="flex h-20 w-20 items-center justify-center rounded-2xl bg-forest-500/20 transition-all hover:bg-forest-500/30 hover:scale-105"
+									>
+										<Play class="h-10 w-10 text-forest-400" />
+									</button>
+								{:else}
+									<div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-forest-500/20">
+										<Calendar class="h-10 w-10 text-forest-400" />
+									</div>
+								{/if}
 							</div>
 						</div>
 					</CardContent>
@@ -845,9 +1332,9 @@
 					{:else}
 						<div class="space-y-4">
 							{#each data.runs as run}
-								<div class="rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-colors hover:border-slate-700/50">
+								<div class="group rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-colors hover:border-slate-700/50">
 									<div class="flex items-start justify-between">
-										<div>
+										<div class="flex-1">
 											<p class="font-medium text-slate-200">{run.dateFormatted}</p>
 											<div class="mt-1 flex items-center gap-4 text-sm text-slate-400">
 												<span>{run.distance}</span>
@@ -860,6 +1347,24 @@
 													<span class="text-coral-400">{run.avg_hr} bpm</span>
 												{/if}
 											</div>
+										</div>
+										
+										<!-- Edit/Delete buttons (visible on hover) -->
+										<div class="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+											<button
+												onclick={() => openEditModal(run)}
+												class="rounded-lg p-2 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-300"
+												title="Edit run"
+											>
+												<Pencil class="h-4 w-4" />
+											</button>
+											<button
+												onclick={() => openDeleteConfirm(run)}
+												class="rounded-lg p-2 text-slate-500 transition-colors hover:bg-red-900/30 hover:text-red-400"
+												title="Delete run"
+											>
+												<Trash2 class="h-4 w-4" />
+											</button>
 										</div>
 									</div>
 

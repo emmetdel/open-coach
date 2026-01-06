@@ -12,6 +12,13 @@ import {
 } from './db';
 import type { Run, TrainingPlan } from './db';
 import { formatDistance, formatDuration, calculatePace } from './garmin';
+import {
+	getRunFeedbackSystemPrompt,
+	getRunFeedbackUserPrompt,
+	getMilestoneCelebration,
+	getMilestoneContext,
+	DEFAULT_FEEDBACK_MESSAGES
+} from '$lib/prompts';
 
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
@@ -103,29 +110,12 @@ export async function analyzeRun(
 	const recentRuns = await getRecentRuns(db, 100);
 	const runNumber = recentRuns.length + 1; // This will be their nth run
 
-	// Build celebration prefix for milestones
-	let celebrationPrefix = '';
-	if (runNumber === 1) {
-		celebrationPrefix = '🎉 YOUR FIRST RUN! ';
-	} else if (runNumber === 5) {
-		celebrationPrefix = '🔥 5 runs complete! ';
-	} else if (runNumber === 10) {
-		celebrationPrefix = '🏆 Double digits - 10 runs! ';
-	} else if (runNumber === 25) {
-		celebrationPrefix = '⭐ 25 runs! Amazing dedication! ';
-	} else if (runNumber === 50) {
-		celebrationPrefix = '🚀 50 RUNS! Incredible milestone! ';
-	}
+	// Get celebration prefix and context from centralized prompts
+	const celebrationPrefix = getMilestoneCelebration(runNumber);
+	const milestoneContext = getMilestoneContext(runNumber);
 
 	if (!apiKey) {
-		const defaultMessages = [
-			'Great job getting out there today! Keep up the consistency.',
-			'Another run in the books! You showed up, and that matters.',
-			'You did it! Every step is building your running foundation.',
-			'Way to go! Consistency is the key to becoming a runner.',
-			"Excellent work today! You're building a habit that will change your life."
-		];
-		return celebrationPrefix + defaultMessages[Math.floor(Math.random() * defaultMessages.length)];
+		return celebrationPrefix + DEFAULT_FEEDBACK_MESSAGES[Math.floor(Math.random() * DEFAULT_FEEDBACK_MESSAGES.length)];
 	}
 
 	const distance = formatDistance(run.distance_meters);
@@ -144,35 +134,9 @@ export async function analyzeRun(
 		}
 	}
 
-	// Add milestone context for AI
-	let milestoneContext = '';
-	if (runNumber === 1) {
-		milestoneContext = 'THIS IS THEIR FIRST EVER RUN! Make this extra special and celebratory!';
-	} else if (runNumber === 5) {
-		milestoneContext = 'This is their 5th run! They are building a real habit now.';
-	} else if (runNumber === 10) {
-		milestoneContext = 'This is their 10th run! A major milestone.';
-	} else if (runNumber % 10 === 0) {
-		milestoneContext = `This is run #${runNumber}! Celebrate this milestone.`;
-	}
-
-	const systemPrompt = `You are a supportive running coach who prioritizes mental health over metrics. 
-Your philosophy: "Consistency over intensity. Every run counts."
-Keep responses brief (2-3 sentences), warm, and encouraging.
-Focus on effort and showing up, not speed or distance.
-If someone is struggling or ran slow, celebrate that they got out there.
-Never be critical or suggest they should have done more.
-${milestoneContext}`;
-
-	const userPrompt = `My runner just completed a run. Please give them brief, empathetic feedback.
-
-Run data:
-- Distance: ${distance}
-- Duration: ${duration}  
-- Pace: ${pace}
-${hrContext}
-
-Focus on celebrating the effort, not the metrics. Keep it warm and personal.`;
+	// Use centralized prompts
+	const systemPrompt = getRunFeedbackSystemPrompt(milestoneContext);
+	const userPrompt = getRunFeedbackUserPrompt(distance, duration, pace, hrContext);
 
 	try {
 		const feedback = await callOpenRouter(apiKey, model, [

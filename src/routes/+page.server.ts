@@ -127,6 +127,68 @@ export const load: PageServerLoad = async ({ locals }) => {
 	// Get tips for next run type
 	const tips = nextRun ? getBeginnerTips(nextRun.type) : getBeginnerTips('Easy');
 
+	// Check if there's a run scheduled for today
+	const today = new Date().toISOString().split('T')[0];
+	const todaysRun = upcomingPlans.find((p) => p.scheduled_date === today);
+	
+	// Format today's run for the "I'm going" button
+	const todaysRunDisplay = todaysRun ? {
+		id: todaysRun.id,
+		type: todaysRun.type,
+		distance: todaysRun.target_distance_km 
+			? `${todaysRun.target_distance_km}km`
+			: todaysRun.target_duration_minutes 
+				? `${todaysRun.target_duration_minutes} min`
+				: '',
+		description: todaysRun.description,
+		garminSynced: !!todaysRun.garmin_workout_id
+	} : null;
+
+	// Analyze recovery status for smart suggestions
+	let recoveryAlert: {
+		type: 'low' | 'moderate' | 'good';
+		message: string;
+		suggestion: 'reschedule' | 'reduce' | 'proceed' | null;
+		todaysRunId?: string;
+		todaysRunType?: string;
+	} | null = null;
+
+	if (todaysRun && healthSnapshot) {
+		const bodyBattery = healthSnapshot.bodyBattery?.morning;
+		const sleepHours = healthSnapshot.sleep?.durationHours;
+		const sleepQuality = healthSnapshot.sleep?.quality;
+
+		// Determine recovery level
+		const isLowBattery = bodyBattery !== undefined && bodyBattery < 40;
+		const isPoorSleep = sleepHours !== undefined && sleepHours < 5;
+		const isModerateBattery = bodyBattery !== undefined && bodyBattery >= 40 && bodyBattery < 60;
+		const isFairSleep = sleepQuality === 'fair' || sleepQuality === 'poor';
+
+		if (isLowBattery || isPoorSleep) {
+			// Low recovery - suggest rescheduling
+			const reasons = [];
+			if (isLowBattery) reasons.push(`Body Battery at ${bodyBattery}%`);
+			if (isPoorSleep) reasons.push(`only ${sleepHours?.toFixed(1)}h sleep`);
+
+			recoveryAlert = {
+				type: 'low',
+				message: `Your recovery is low today (${reasons.join(', ')}). Pushing through may lead to burnout.`,
+				suggestion: 'reschedule',
+				todaysRunId: todaysRun.id,
+				todaysRunType: todaysRun.type
+			};
+		} else if (isModerateBattery || isFairSleep) {
+			// Moderate recovery - suggest easier workout
+			recoveryAlert = {
+				type: 'moderate',
+				message: `Recovery is moderate today. Consider an easier effort or shorter distance.`,
+				suggestion: 'reduce',
+				todaysRunId: todaysRun.id,
+				todaysRunType: todaysRun.type
+			};
+		}
+	}
+
 	return {
 		runs: runsDisplay,
 		weeklyStats,
@@ -154,6 +216,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 			weeklyProgress: progress.weeklyProgress
 		},
 		tips,
-		health: healthSnapshot
+		health: healthSnapshot,
+		recoveryAlert,
+		todaysRun: todaysRunDisplay
 	};
 };
