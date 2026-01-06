@@ -264,23 +264,22 @@ export async function generateFullPlan(
 
 	const availableDays: string[] = JSON.parse(availableDaysJson);
 
-	// Calculate weeks until goal - but only plan 1 week at a time
-	// This allows for schedule flexibility and adjustments based on how training goes
+	// Calculate weeks until goal
+	// Generate full plan for visibility, but only next 7 days sync to Garmin
 	const today = new Date();
 	const goalDate = new Date(targetDate);
 	const daysUntilGoal = Math.ceil((goalDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 	const weeksUntilGoal = Math.max(1, Math.ceil(daysUntilGoal / 7));
-	const totalWeeks = 1; // Only plan 1 week at a time for flexibility
 	
-	// Store total weeks remaining for progress tracking
-	const _totalWeeksRemaining = Math.min(weeksUntilGoal, 52); // Just for reference
+	// Cap at reasonable max (16 weeks is typical training plan length)
+	const totalWeeks = Math.min(weeksUntilGoal, 16);
 
 	// Determine fitness level
 	const isComplete = currentFitness.toLowerCase().includes('5k') || 
 		currentFitness.toLowerCase().includes('regular') ||
 		currentFitness.toLowerCase().includes('experienced');
 
-	// Generate a structured plan
+	// Generate a structured plan (full plan shown in app, only 7 days sync to Garmin)
 	return generateStructuredPlan(db, availableDays, totalWeeks, isComplete);
 }
 

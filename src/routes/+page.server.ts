@@ -7,7 +7,7 @@ import {
 	getUpcomingPlans,
 	getNextRun
 } from '$lib/server/db';
-import { formatDistance, formatDuration, calculatePace } from '$lib/server/garmin';
+import { formatDistance, formatDuration, calculatePace, getHealthSnapshot, type HealthSnapshot } from '$lib/server/garmin';
 import { calculateStreak, getProgressStats, getBeginnerTips } from '$lib/server/reminders';
 
 export interface RunDisplay {
@@ -49,13 +49,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 	}
 
 	// Fetch data in parallel
-	const [runs, weeklyStats, upcomingPlans, nextRun, streak, progress] = await Promise.all([
+	const [runs, weeklyStats, upcomingPlans, nextRun, streak, progress, healthSnapshot] = await Promise.all([
 		getRecentRuns(db, 10),
 		getConsistencyStats(db, 8),
 		getUpcomingPlans(db, 7),
 		getNextRun(db),
 		calculateStreak(db),
-		getProgressStats(db)
+		getProgressStats(db),
+		getHealthSnapshot(db)
 	]);
 
 	// Transform runs for display
@@ -152,6 +153,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 				: null,
 			weeklyProgress: progress.weeklyProgress
 		},
-		tips
+		tips,
+		health: healthSnapshot
 	};
 };

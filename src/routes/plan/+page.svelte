@@ -220,12 +220,6 @@
 									</div>
 								</div>
 
-								<!-- Progress indicator -->
-								<div class="mb-4 flex gap-1">
-									<div class="h-1 flex-1 rounded-full bg-forest-500"></div>
-									<div class="h-1 flex-1 rounded-full bg-slate-700"></div>
-								</div>
-
 								<p class="mb-4 text-sm text-slate-400">
 									Total Workouts: <span class="font-semibold text-white">{week.totalWorkouts}</span>
 								</p>

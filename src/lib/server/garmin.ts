@@ -558,3 +558,169 @@ export async function pushWeekToGarmin(
 
 	return { success: errors.length === 0, pushed, errors };
 }
+
+// =========== Health Data Functions ===========
+
+export interface HealthSnapshot {
+	date: string;
+	sleep?: {
+		durationHours: number;
+		quality: string; // 'poor', 'fair', 'good', 'excellent'
+		deepSleepMinutes?: number;
+		remSleepMinutes?: number;
+	};
+	hrv?: {
+		avg: number;
+		status: string; // 'low', 'balanced', 'high'
+	};
+	bodyBattery?: {
+		morning: number; // 0-100
+		change: number; // overnight change
+	};
+	restingHR?: number;
+	steps?: number;
+}
+
+// Get today's health snapshot for AI context
+export async function getHealthSnapshot(db: Database, date?: Date): Promise<HealthSnapshot | null> {
+	try {
+		const hasTokens = await hasValidTokens(db);
+		if (!hasTokens) return null;
+
+		const client = await getGarminClient(db);
+		const targetDate = date || new Date();
+		const dateStr = targetDate.toISOString().split('T')[0];
+
+		const snapshot: HealthSnapshot = { date: dateStr };
+
+		// Fetch sleep data (includes HRV, body battery)
+		try {
+			const sleepData = await client.getSleepData(targetDate);
+			if (sleepData) {
+				// eslint-disable-next-line @typescript-eslint/no-explicit-any
+				const response = sleepData as any;
+				
+				// The sleep data is nested in dailySleepDTO
+				const daily = response.dailySleepDTO || response;
+				
+				// Duration - sleepTimeSeconds is the main field
+				const sleepSeconds = daily.sleepTimeSeconds || daily.totalSleepTimeInSeconds || 0;
+				const durationHours = sleepSeconds / 3600;
+
+				if (durationHours > 0) {
+					// Quality based on duration and deep sleep
+					let quality = 'fair';
+					if (durationHours >= 7.5) quality = 'excellent';
+					else if (durationHours >= 6.5) quality = 'good';
+					else if (durationHours < 5) quality = 'poor';
+
+					const deepSeconds = daily.deepSleepSeconds || 0;
+					const remSeconds = daily.remSleepSeconds || 0;
+
+					snapshot.sleep = {
+						durationHours: Math.round(durationHours * 10) / 10,
+						quality,
+						deepSleepMinutes: deepSeconds ? Math.round(deepSeconds / 60) : undefined,
+						remSleepMinutes: remSeconds ? Math.round(remSeconds / 60) : undefined
+					};
+
+					// HRV from sleep data
+					const avgHrv = daily.avgOvernightHrv || response.avgOvernightHrv;
+					if (avgHrv) {
+						let status = 'balanced';
+						const hrvStatus = daily.hrvStatus || response.hrvStatus;
+						if (hrvStatus) {
+							status = String(hrvStatus).toLowerCase();
+						} else if (avgHrv < 30) {
+							status = 'low';
+						} else if (avgHrv > 60) {
+							status = 'high';
+						}
+
+						snapshot.hrv = {
+							avg: Math.round(avgHrv),
+							status
+						};
+					}
+
+					// Body battery - look in multiple places
+					const batteryChange = daily.bodyBatteryChange ?? response.bodyBatteryChange;
+					if (batteryChange !== undefined) {
+						// Try to get the morning battery value
+						const batteryValues = daily.sleepBodyBattery || response.sleepBodyBattery || [];
+						const morningBattery = batteryValues.length > 0 
+							? batteryValues[batteryValues.length - 1]?.value 
+							: (daily.awakeSleepBodyBattery || 50);
+						snapshot.bodyBattery = {
+							morning: morningBattery || 50,
+							change: batteryChange
+						};
+					}
+
+					console.log(`  Sleep data: ${durationHours.toFixed(1)}h, HRV: ${snapshot.hrv?.avg || 'N/A'}, Battery: ${snapshot.bodyBattery?.morning || 'N/A'}`);
+				}
+			}
+		} catch (err) {
+			console.warn('Could not fetch sleep data:', err);
+		}
+
+		// Fetch heart rate (for resting HR)
+		try {
+			const hrData = await client.getHeartRate(targetDate);
+			// eslint-disable-next-line @typescript-eslint/no-explicit-any
+			const hrAny = hrData as any;
+			if (hrAny?.restingHeartRate) {
+				snapshot.restingHR = hrAny.restingHeartRate;
+			}
+		} catch (err) {
+			console.warn('Could not fetch heart rate:', err);
+		}
+
+		// Fetch steps
+		try {
+			const steps = await client.getSteps(targetDate);
+			if (steps) {
+				// Steps can be returned as a number or as an object with totalSteps
+				if (typeof steps === 'number') {
+					snapshot.steps = steps;
+				} else if (typeof steps === 'object') {
+					// eslint-disable-next-line @typescript-eslint/no-explicit-any
+					const stepsObj = steps as any;
+					snapshot.steps = stepsObj.totalSteps || stepsObj.steps || stepsObj;
+				}
+			}
+		} catch (err) {
+			console.warn('Could not fetch steps:', err);
+		}
+
+		// Save tokens in case they were refreshed
+		await saveTokens(db, client);
+
+		return snapshot;
+	} catch (err) {
+		console.error('getHealthSnapshot error:', err);
+		return null;
+	}
+}
+
+// Get health data for the past N days (for trend analysis)
+export async function getHealthTrend(db: Database, days = 7): Promise<HealthSnapshot[]> {
+	const snapshots: HealthSnapshot[] = [];
+
+	for (let i = 0; i < days; i++) {
+		const date = new Date();
+		date.setDate(date.getDate() - i);
+
+		const snapshot = await getHealthSnapshot(db, date);
+		if (snapshot) {
+			snapshots.push(snapshot);
+		}
+
+		// Small delay to avoid rate limiting
+		if (i < days - 1) {
+			await new Promise((resolve) => setTimeout(resolve, 200));
+		}
+	}
+
+	return snapshots;
+}

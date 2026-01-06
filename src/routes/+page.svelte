@@ -4,13 +4,54 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import GarminAuthModal from '$lib/components/GarminAuthModal.svelte';
-	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key, Settings, Flame, Trophy, Lightbulb, Target } from 'lucide-svelte';
+	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Settings, Flame, Trophy, Lightbulb, Target, Palette, Sun, Moon, Heart, Battery, BedDouble } from 'lucide-svelte';
 	import type { PageData } from './$types';
+	import { onMount } from 'svelte';
 
 	let { data }: { data: PageData } = $props();
 
 	let syncing = $state(false);
 	let syncMessage = $state('');
+
+	// Theme picker
+	let showThemePicker = $state(false);
+	let currentTheme = $state('forest');
+	let isDarkMode = $state(true);
+	
+	const themes = [
+		{ id: 'forest', name: 'Forest', color: '#22c55e' },
+		{ id: 'ocean', name: 'Ocean', color: '#3b82f6' },
+		{ id: 'sunset', name: 'Sunset', color: '#f97316' },
+		{ id: 'violet', name: 'Violet', color: '#a855f7' },
+		{ id: 'rose', name: 'Rose', color: '#f43f5e' },
+		{ id: 'amber', name: 'Amber', color: '#f59e0b' }
+	];
+
+	onMount(() => {
+		const savedTheme = localStorage.getItem('opencoach-theme');
+		const savedMode = localStorage.getItem('opencoach-mode');
+		if (savedTheme) {
+			currentTheme = savedTheme;
+			document.documentElement.setAttribute('data-theme', savedTheme === 'forest' ? '' : savedTheme);
+		}
+		if (savedMode) {
+			isDarkMode = savedMode === 'dark';
+			document.documentElement.setAttribute('data-mode', savedMode);
+		}
+	});
+
+	function setTheme(themeId: string) {
+		currentTheme = themeId;
+		localStorage.setItem('opencoach-theme', themeId);
+		document.documentElement.setAttribute('data-theme', themeId === 'forest' ? '' : themeId);
+	}
+
+	function toggleDarkMode() {
+		isDarkMode = !isDarkMode;
+		const mode = isDarkMode ? 'dark' : 'light';
+		localStorage.setItem('opencoach-mode', mode);
+		document.documentElement.setAttribute('data-mode', mode);
+	}
 
 	// Manual run entry
 	let showAddRun = $state(false);
@@ -20,17 +61,55 @@
 	let runDuration = $state('');
 	let runHr = $state('');
 
-	// Token import
-	let showImportTokens = $state(false);
-	let tokenJson = $state('');
-	let importingTokens = $state(false);
-
 	// Garmin re-auth modal
 	let showAuthModal = $state(false);
 	let syncAttemptAfterAuth = $state(false); // Track if this is a retry after auth
 
 	// Plan generation
 	let generatingPlan = $state(false);
+
+	// AI Coach Chat
+	interface ChatMessage {
+		role: 'user' | 'assistant';
+		content: string;
+	}
+	let chatInput = $state('');
+	let chatMessages = $state<ChatMessage[]>([]);
+	let chatLoading = $state(false);
+	let chatExpanded = $state(false);
+
+	async function sendChatMessage() {
+		if (!chatInput.trim() || chatLoading) return;
+
+		const userMessage = chatInput.trim();
+		chatInput = '';
+		chatMessages = [...chatMessages, { role: 'user', content: userMessage }];
+		chatLoading = true;
+		chatExpanded = true;
+
+		try {
+			const res = await fetch('/api/chat', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					message: userMessage,
+					history: chatMessages.slice(-10) // Last 10 messages for context
+				})
+			});
+
+			const result = await res.json();
+
+			if (result.success) {
+				chatMessages = [...chatMessages, { role: 'assistant', content: result.reply }];
+			} else {
+				chatMessages = [...chatMessages, { role: 'assistant', content: `Sorry, I had trouble responding: ${result.error}` }];
+			}
+		} catch (err) {
+			chatMessages = [...chatMessages, { role: 'assistant', content: 'Network error. Please try again.' }];
+		} finally {
+			chatLoading = false;
+		}
+	}
 
 	async function syncNow() {
 		syncing = true;
@@ -117,40 +196,6 @@
 		}
 	}
 
-	async function importTokens() {
-		if (!tokenJson.trim()) {
-			syncMessage = 'Please paste the token JSON';
-			return;
-		}
-
-		importingTokens = true;
-		syncMessage = '';
-
-		try {
-			const tokens = JSON.parse(tokenJson);
-
-			const res = await fetch('/api/garmin/tokens', {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(tokens)
-			});
-
-			const result: { success: boolean } = await res.json();
-
-			if (result.success) {
-				syncMessage = 'Garmin tokens imported! Try syncing now.';
-				showImportTokens = false;
-				tokenJson = '';
-			} else {
-				syncMessage = 'Failed to import tokens';
-			}
-		} catch {
-			syncMessage = 'Invalid JSON format';
-		} finally {
-			importingTokens = false;
-		}
-	}
-
 	async function generatePlan() {
 		generatingPlan = true;
 		syncMessage = '';
@@ -210,46 +255,48 @@
 		onSuccess={onAuthSuccess}
 	/>
 
-	<!-- Import Tokens Modal -->
-	{#if showImportTokens}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-			<div class="mx-4 w-full max-w-lg rounded-2xl border border-slate-700/50 bg-slate-850 p-6 shadow-2xl">
-				<div class="mb-6 flex items-center justify-between">
-					<h2 class="font-display text-xl font-bold text-white">Import Garmin Tokens</h2>
-					<button onclick={() => (showImportTokens = false)} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
-						<X class="h-5 w-5" />
+	<!-- Theme Picker Modal -->
+	{#if showThemePicker}
+		<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+		<div class="fixed inset-0 z-[200]" onclick={() => showThemePicker = false}>
+			<!-- svelte-ignore a11y_no_static_element_interactions a11y_click_events_have_key_events -->
+			<div 
+				class="fixed right-4 top-16 w-48 rounded-xl border border-slate-700/50 bg-slate-850 p-2 shadow-2xl"
+				onclick={(e) => e.stopPropagation()}
+			>
+				<!-- Light/Dark Toggle -->
+				<button
+					onclick={toggleDarkMode}
+					class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-slate-800"
+				>
+					<span class="text-slate-200">Mode</span>
+					<div class="flex items-center gap-2">
+						{#if isDarkMode}
+							<Moon class="h-4 w-4 text-slate-400" />
+							<span class="text-xs text-slate-400">Dark</span>
+						{:else}
+							<Sun class="h-4 w-4 text-amber-400" />
+							<span class="text-xs text-amber-400">Light</span>
+						{/if}
+					</div>
+				</button>
+				
+				<div class="my-2 border-t border-slate-700/50"></div>
+				
+				<!-- Color Themes -->
+				<p class="px-3 py-1 text-xs font-medium uppercase tracking-wider text-slate-500">Accent Color</p>
+				{#each themes as theme}
+					<button
+						onclick={() => setTheme(theme.id)}
+						class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-slate-800 {currentTheme === theme.id ? 'bg-slate-800' : ''}"
+					>
+						<div class="h-4 w-4 rounded-full shadow-sm" style="background-color: {theme.color}"></div>
+						<span class="text-slate-200">{theme.name}</span>
+						{#if currentTheme === theme.id}
+							<span class="ml-auto text-xs" style="color: {theme.color}">✓</span>
+						{/if}
 					</button>
-				</div>
-
-				<div class="mb-4 rounded-lg bg-slate-800/50 p-4 text-sm text-slate-300">
-					<p class="mb-2"><strong>Manual token import:</strong></p>
-					<p class="text-slate-400">
-						If you have OAuth tokens from another source, paste the JSON below.
-						Format: <code class="rounded bg-slate-700 px-1">{`{"oauth1": {...}, "oauth2": {...}}`}</code>
-					</p>
-				</div>
-
-				<form onsubmit={(e) => { e.preventDefault(); importTokens(); }} class="space-y-4">
-					<div class="space-y-2">
-						<Label for="token-json">Token JSON</Label>
-						<textarea
-							id="token-json"
-							bind:value={tokenJson}
-							placeholder={'{"oauth1": {...}, "oauth2": {...}}'}
-							rows="6"
-							class="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500/20"
-						></textarea>
-					</div>
-
-					<div class="flex gap-3 pt-2">
-						<Button type="button" variant="outline" onclick={() => (showImportTokens = false)} class="flex-1">
-							Cancel
-						</Button>
-						<Button type="submit" class="flex-1" disabled={importingTokens}>
-							{importingTokens ? 'Importing...' : 'Import Tokens'}
-						</Button>
-					</div>
-				</form>
+				{/each}
 			</div>
 		</div>
 	{/if}
@@ -311,7 +358,7 @@
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
 			<div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
 				<div class="flex items-center gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30">
+					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-accent-500 to-accent-600 shadow-lg shadow-accent-900/30">
 						<Zap class="h-5 w-5 text-white" />
 					</div>
 					<span class="font-display text-xl font-bold text-white">OpenCoach</span>
@@ -326,13 +373,16 @@
 					<Button onclick={() => (showAddRun = true)} variant="ghost" size="sm" title="Add manual run">
 						<Plus class="h-4 w-4" />
 					</Button>
-					<Button onclick={() => (showImportTokens = true)} variant="ghost" size="sm" title="Import Garmin tokens">
-						<Key class="h-4 w-4" />
-					</Button>
 					<Button onclick={syncNow} variant="outline" size="sm" disabled={syncing}>
 						<RefreshCw class={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
 						{syncing ? 'Syncing...' : 'Sync'}
 					</Button>
+					
+					<!-- Theme Picker Button -->
+					<Button onclick={() => (showThemePicker = !showThemePicker)} variant="ghost" size="sm" title="Change theme">
+						<Palette class="h-4 w-4" />
+					</Button>
+
 					<a href="/setup">
 						<Button variant="ghost" size="sm" title="Settings & Goals">
 							<Settings class="h-4 w-4" />
@@ -344,21 +394,91 @@
 
 		<main class="mx-auto max-w-6xl px-6 py-8">
 			{#if syncMessage}
-				<div class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400">
+				<div class="mb-6 rounded-xl bg-accent-500/10 px-4 py-3 text-sm text-accent-400">
 					{syncMessage}
 				</div>
 			{/if}
 
+			<!-- AI Coach Chat -->
+			<div class="mb-6">
+				<div class="rounded-2xl border border-slate-700/50 bg-slate-850/80 backdrop-blur-sm overflow-hidden">
+					<!-- Chat Input -->
+					<form onsubmit={(e) => { e.preventDefault(); sendChatMessage(); }} class="flex items-center gap-3 p-4">
+						<div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-coral-500 to-coral-600 shadow-lg shadow-coral-900/20">
+							<MessageCircle class="h-5 w-5 text-white" />
+						</div>
+						<input
+							type="text"
+							bind:value={chatInput}
+							placeholder="Ask your coach anything... (training tips, plan questions, motivation)"
+							class="flex-1 bg-transparent text-slate-100 placeholder:text-slate-500 focus:outline-none"
+							disabled={chatLoading}
+						/>
+						<Button type="submit" size="sm" disabled={chatLoading || !chatInput.trim()}>
+							{chatLoading ? '...' : 'Send'}
+						</Button>
+					</form>
+
+					<!-- Chat History (expandable) -->
+					{#if chatMessages.length > 0}
+						<div class="border-t border-slate-700/50">
+							{#if !chatExpanded && chatMessages.length > 2}
+								<button
+									onclick={() => chatExpanded = true}
+									class="w-full px-4 py-2 text-xs text-slate-500 hover:text-slate-400 hover:bg-slate-800/50"
+								>
+									Show {chatMessages.length} messages...
+								</button>
+							{/if}
+							
+							<div class="max-h-64 overflow-y-auto p-4 space-y-3">
+								{#each chatExpanded ? chatMessages : chatMessages.slice(-2) as msg}
+									<div class="flex gap-3 {msg.role === 'user' ? 'justify-end' : ''}">
+										{#if msg.role === 'assistant'}
+											<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-forest-500/20">
+												<Lightbulb class="h-4 w-4 text-forest-400" />
+											</div>
+										{/if}
+										<div class="rounded-xl px-4 py-2 max-w-[80%] {msg.role === 'user' ? 'bg-forest-600/30 text-forest-100' : 'bg-slate-800 text-slate-200'}">
+											<p class="text-sm whitespace-pre-wrap">{msg.content}</p>
+										</div>
+									</div>
+								{/each}
+								{#if chatLoading}
+									<div class="flex gap-3">
+										<div class="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-forest-500/20">
+											<Lightbulb class="h-4 w-4 text-forest-400 animate-pulse" />
+										</div>
+										<div class="rounded-xl bg-slate-800 px-4 py-2">
+											<p class="text-sm text-slate-400">Thinking...</p>
+										</div>
+									</div>
+								{/if}
+							</div>
+
+							{#if chatExpanded && chatMessages.length > 0}
+								<button
+									onclick={() => { chatMessages = []; chatExpanded = false; }}
+									class="w-full border-t border-slate-700/50 px-4 py-2 text-xs text-slate-500 hover:text-red-400 hover:bg-slate-800/50"
+								>
+									Clear conversation
+								</button>
+							{/if}
+						</div>
+					{/if}
+				</div>
+			</div>
+
 			<!-- Next Run Hero -->
 			{#if data.nextRun}
-				<Card class="mb-8 border-forest-500/30 bg-gradient-to-br from-forest-900/20 to-slate-900">
+				<Card class="mb-8 border-accent-500/30 bg-gradient-to-br from-accent-900/20 to-slate-900">
 					<CardContent class="p-6">
 						<div class="flex items-center justify-between">
 							<div>
-								<p class="text-sm font-medium uppercase tracking-wider text-forest-400">Next Run</p>
+								<p class="text-sm font-medium uppercase tracking-wider text-accent-400">Next Run</p>
 								<h2 class="mt-1 font-display text-2xl font-bold text-white">{data.nextRun.dateFormatted}</h2>
 								<div class="mt-2 flex items-center gap-3">
-									<span class="rounded-lg bg-forest-500/20 px-3 py-1 text-sm font-medium text-forest-300">
+									<span class="rounded-lg bg-accent-500/20 px-3 py-1 text-sm font-medium text-accent-300">
 										{data.nextRun.type}
 									</span>
 									<span class="text-lg font-semibold text-slate-200">{data.nextRun.distance}</span>
@@ -527,6 +647,99 @@
 					</CardContent>
 				</Card>
 			</div>
+
+			<!-- Health Stats (from Garmin) -->
+			{#if data.health}
+				{@const batteryLevel = data.health.bodyBattery?.morning}
+				<Card class="mb-8 border-indigo-500/20 bg-gradient-to-br from-indigo-900/10 to-slate-900">
+					<CardHeader>
+						<CardTitle class="flex items-center gap-2 text-lg">
+							<Heart class="h-5 w-5 text-indigo-400" />
+							Today's Recovery
+						</CardTitle>
+					</CardHeader>
+					<CardContent>
+						<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+							<!-- Sleep -->
+							{#if data.health.sleep}
+								<div class="rounded-xl bg-slate-800/50 p-4">
+									<div class="flex items-center gap-2 mb-2">
+										<BedDouble class="h-4 w-4 text-blue-400" />
+										<span class="text-sm text-slate-400">Sleep</span>
+									</div>
+									<p class="font-display text-2xl font-bold text-white">
+										{data.health.sleep.durationHours.toFixed(1)}<span class="text-sm font-normal text-slate-400">hrs</span>
+									</p>
+									<p class="text-xs text-slate-500 mt-1 capitalize">{data.health.sleep.quality}</p>
+								</div>
+							{/if}
+
+							<!-- Body Battery -->
+							{#if batteryLevel !== undefined}
+								<div class="rounded-xl bg-slate-800/50 p-4">
+									<div class="flex items-center gap-2 mb-2">
+										<Battery class="h-4 w-4 text-emerald-400" />
+										<span class="text-sm text-slate-400">Body Battery</span>
+									</div>
+									<p class="font-display text-2xl font-bold {batteryLevel >= 50 ? 'text-emerald-400' : batteryLevel >= 25 ? 'text-amber-400' : 'text-red-400'}">
+										{batteryLevel}<span class="text-sm font-normal text-slate-400">/100</span>
+									</p>
+									<p class="text-xs text-slate-500 mt-1">
+										{batteryLevel >= 70 ? 'Great for a workout!' : batteryLevel >= 40 ? 'Take it easy' : 'Consider rest'}
+									</p>
+								</div>
+							{/if}
+
+							<!-- HRV -->
+							{#if data.health.hrv}
+								<div class="rounded-xl bg-slate-800/50 p-4">
+									<div class="flex items-center gap-2 mb-2">
+										<Activity class="h-4 w-4 text-purple-400" />
+										<span class="text-sm text-slate-400">HRV</span>
+									</div>
+									<p class="font-display text-2xl font-bold text-white">
+										{data.health.hrv.avg}<span class="text-sm font-normal text-slate-400">ms</span>
+									</p>
+									<p class="text-xs mt-1 capitalize {data.health.hrv.status === 'balanced' ? 'text-emerald-400' : data.health.hrv.status === 'low' ? 'text-red-400' : 'text-amber-400'}">
+										{data.health.hrv.status}
+									</p>
+								</div>
+							{/if}
+
+							<!-- Resting HR -->
+							{#if data.health.restingHR}
+								<div class="rounded-xl bg-slate-800/50 p-4">
+									<div class="flex items-center gap-2 mb-2">
+										<Heart class="h-4 w-4 text-red-400" />
+										<span class="text-sm text-slate-400">Resting HR</span>
+									</div>
+									<p class="font-display text-2xl font-bold text-white">
+										{data.health.restingHR}<span class="text-sm font-normal text-slate-400">bpm</span>
+									</p>
+									{#if data.health.steps}
+										<p class="text-xs text-slate-500 mt-1">{data.health.steps.toLocaleString()} steps</p>
+									{/if}
+								</div>
+							{/if}
+						</div>
+
+						<!-- Recovery Summary -->
+						<div class="mt-4 rounded-xl bg-slate-800/30 p-3 text-center">
+							{#if batteryLevel !== undefined}
+								{#if batteryLevel >= 70}
+									<p class="text-sm text-emerald-400">✨ You're well recovered! Great day for a quality workout.</p>
+								{:else if batteryLevel >= 40}
+									<p class="text-sm text-amber-400">⚡ Moderate recovery. Consider an easy run or rest day.</p>
+								{:else}
+									<p class="text-sm text-red-400">😴 Low recovery. Prioritize rest and sleep today.</p>
+								{/if}
+							{:else}
+								<p class="text-sm text-slate-400">Wear your watch to track recovery metrics.</p>
+							{/if}
+						</div>
+					</CardContent>
+				</Card>
+			{/if}
 
 			<!-- Progress Card (if user has runs) -->
 			{#if data.progress.totalRuns > 0}
