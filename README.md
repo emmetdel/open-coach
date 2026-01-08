@@ -49,7 +49,7 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 
 1. Clone the repository:
    ```bash
-   git clone https://github.com/emmetdel/open-coach.git
+   git clone https://github.com/yourusername/open-coach.git
    cd open-coach
    ```
 
@@ -101,8 +101,8 @@ OpenCoach uses OpenRouter, giving you access to multiple AI providers:
 
 | Model | Provider | Best For |
 |-------|----------|----------|
-| Claude Sonnet 4 | Anthropic | High quality feedback (default) |
-| Claude 3.5 Haiku | Anthropic | Fast, affordable |
+| Claude 3.5 Haiku | Anthropic | Fast, affordable (default) |
+| Claude 3.5 Sonnet | Anthropic | High quality feedback |
 | GPT-4o Mini | OpenAI | Balanced performance |
 | GPT-4o | OpenAI | Premium responses |
 | Gemini 2.0 Flash | Google | Fast responses |
@@ -154,7 +154,7 @@ OpenCoach uses node-cron for background tasks:
 | `GARMIN_EMAIL` | - | Garmin email (optional, can set in UI) |
 | `GARMIN_PASSWORD` | - | Garmin password (optional, can set in UI) |
 | `OPENROUTER_API_KEY` | - | OpenRouter API key (optional, can set in UI) |
-| `OPENROUTER_MODEL` | anthropic/claude-sonnet-4 | Default AI model |
+| `OPENROUTER_MODEL` | anthropic/claude-3.5-haiku | Default AI model |
 
 ## Security
 
@@ -166,4 +166,4 @@ OpenCoach uses node-cron for background tasks:
 
 ## License
 
-[Polyform Noncommercial 1.0.0](LICENSE) — Free for personal use, education, and non-profits. Commercial use requires a separate license.
+MIT

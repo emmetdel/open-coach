@@ -1,6 +1,6 @@
-// SQLite database wrapper using Bun's built-in sqlite
+// SQLite database wrapper using better-sqlite3
 
-import { Database } from 'bun:sqlite';
+import Database, { type Database as DatabaseType } from 'better-sqlite3';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync, readdirSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
@@ -15,16 +15,17 @@ if (!existsSync(DATA_DIR)) {
 }
 
 // Create singleton database instance
-let db: Database | null = null;
+let db: DatabaseType | null = null;
 let migrationsRun = false;
 
-function runMigrations(database: Database): void {
+function runMigrations(database: DatabaseType): void {
 	if (migrationsRun) return;
 	migrationsRun = true;
 	
 	// Find migrations directory - try multiple paths
 	const possiblePaths = [
 		'./migrations',
+		'./web/migrations',
 		join(dirname(fileURLToPath(import.meta.url)), '../../../migrations'),
 	];
 	
@@ -52,7 +53,7 @@ function runMigrations(database: Database): void {
 	
 	// Get already applied migrations
 	const applied = new Set(
-		database.query('SELECT name FROM _migrations').all().map((r: unknown) => (r as { name: string }).name)
+		database.prepare('SELECT name FROM _migrations').all().map((r: { name: string }) => r.name)
 	);
 	
 	// Get migration files
@@ -73,7 +74,7 @@ function runMigrations(database: Database): void {
 		try {
 			database.exec('BEGIN');
 			database.exec(sql);
-			database.query('INSERT INTO _migrations (name) VALUES (?)').run(file);
+			database.prepare('INSERT INTO _migrations (name) VALUES (?)').run(file);
 			database.exec('COMMIT');
 			appliedCount++;
 		} catch (error) {
@@ -88,13 +89,13 @@ function runMigrations(database: Database): void {
 	}
 }
 
-export function getDatabase(): Database {
+export function getDatabase(): DatabaseType {
 	if (!db) {
 		db = new Database(DB_PATH);
 		// Enable WAL mode for better concurrent access
-		db.exec('PRAGMA journal_mode = WAL');
+		db.pragma('journal_mode = WAL');
 		// Enable foreign keys
-		db.exec('PRAGMA foreign_keys = ON');
+		db.pragma('foreign_keys = ON');
 		// Run migrations on first connection
 		runMigrations(db);
 	}
@@ -129,14 +130,14 @@ interface PreparedStatement {
 
 // SQLite wrapper class
 class SQLiteWrapper {
-	private db: Database;
+	private db: DatabaseType;
 
 	constructor() {
 		this.db = getDatabase();
 	}
 
 	prepare(sql: string): PreparedStatement {
-		const query = this.db.query(sql);
+		const stmt = this.db.prepare(sql);
 		let boundValues: unknown[] = [];
 
 		const wrapper: PreparedStatement = {
@@ -146,7 +147,7 @@ class SQLiteWrapper {
 			},
 			first: async <T>(colName?: string): Promise<T | null> => {
 				try {
-					const row = query.get(...boundValues) as Record<string, unknown> | null;
+					const row = stmt.get(...boundValues) as Record<string, unknown> | undefined;
 					if (!row) return null;
 					if (colName) {
 						return row[colName] as T;
@@ -159,7 +160,7 @@ class SQLiteWrapper {
 			},
 			all: async <T>(): Promise<QueryResult<T>> => {
 				try {
-					const rows = query.all(...boundValues) as T[];
+					const rows = stmt.all(...boundValues) as T[];
 					return {
 						results: rows,
 						success: true,
@@ -172,16 +173,13 @@ class SQLiteWrapper {
 			},
 			run: async (): Promise<QueryResult<unknown>> => {
 				try {
-					query.run(...boundValues);
-					// bun:sqlite doesn't return changes/lastInsertRowid from run()
-					// We need to query it separately if needed
-					const changesResult = this.db.query('SELECT changes() as changes, last_insert_rowid() as lastId').get() as { changes: number; lastId: number } | null;
+					const info = stmt.run(...boundValues);
 					return {
 						results: [],
 						success: true,
 						meta: {
-							changes: changesResult?.changes ?? 0,
-							last_row_id: changesResult?.lastId ?? 0
+							changes: info.changes,
+							last_row_id: Number(info.lastInsertRowid)
 						}
 					};
 				} catch (err) {
