@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { ArrowLeft, Calendar, RefreshCw, Settings, Zap, CheckCircle2, Watch, Trash2 } from 'lucide-svelte';
+	import { Input } from '$lib/components/ui/input';
+	import { ArrowLeft, Calendar, RefreshCw, Settings, Zap, CheckCircle2, Watch, Trash2, CalendarClock } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -10,6 +11,10 @@
 	let syncingWatch = $state(false);
 	let deletingWorkouts = $state(false);
 	let message = $state('');
+
+	// Reschedule state
+	let reschedulingWorkouts = $state<Set<string>>(new Set());
+	let showDatePickers = $state<Set<string>>(new Set());
 
 	async function regeneratePlan() {
 		regenerating = true;
@@ -68,6 +73,51 @@
 		}
 	}
 
+	function toggleDatePicker(workoutId: string) {
+		const newSet = new Set(showDatePickers);
+		if (newSet.has(workoutId)) {
+			newSet.delete(workoutId);
+		} else {
+			newSet.add(workoutId);
+		}
+		showDatePickers = newSet;
+	}
+
+	async function rescheduleWorkout(workoutId: string, newDate: string) {
+		const newRescheduling = new Set(reschedulingWorkouts);
+		newRescheduling.add(workoutId);
+		reschedulingWorkouts = newRescheduling;
+		message = '';
+
+		try {
+			const res = await fetch('/api/plan/reschedule', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ planId: workoutId, action: 'reschedule_to_date', newDate })
+			});
+
+			const result = await res.json();
+
+			if (result.success) {
+				message = result.message;
+				// Hide the date picker
+				const newSet = new Set(showDatePickers);
+				newSet.delete(workoutId);
+				showDatePickers = newSet;
+				// Reload to show updated dates
+				setTimeout(() => window.location.reload(), 1000);
+			} else {
+				message = result.error || 'Failed to reschedule';
+			}
+		} catch {
+			message = 'Network error';
+		} finally {
+			const newRescheduling = new Set(reschedulingWorkouts);
+			newRescheduling.delete(workoutId);
+			reschedulingWorkouts = newRescheduling;
+		}
+	}
+
 	// Color for workout type badge
 	function getTypeColor(type: string): string {
 		switch (type) {
@@ -97,9 +147,9 @@
 			<div class="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
 				<div class="flex items-center gap-3">
 					<a href="/" class="flex items-center gap-3">
-						<img 
-							src="/icons/android-chrome-192x192.png" 
-							alt="OpenCoach" 
+						<img
+							src="/icons/android-chrome-192x192.png"
+							alt="OpenCoach"
 							class="h-8 w-8 rounded-lg"
 						/>
 						<span class="font-display text-xl font-bold text-white">Your Plan</span>
@@ -229,27 +279,66 @@
 								<!-- Workouts list -->
 								<div class="space-y-3">
 									{#each week.workouts as workout}
-										<div class="flex items-center gap-4">
-											<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-forest-500/20">
-												{#if workout.status === 'Completed'}
-													<CheckCircle2 class="h-5 w-5 text-forest-400" />
-												{:else}
-													<div class="h-3 w-3 rounded-full bg-forest-500"></div>
+										<div class="rounded-lg border border-slate-700/30 p-3">
+											<div class="flex items-center gap-4">
+												<div class="flex h-8 w-8 items-center justify-center rounded-lg bg-forest-500/20">
+													{#if workout.status === 'Completed'}
+														<CheckCircle2 class="h-5 w-5 text-forest-400" />
+													{:else}
+														<div class="h-3 w-3 rounded-full bg-forest-500"></div>
+													{/if}
+												</div>
+												<div class="flex-1">
+													<div class="flex items-center gap-2">
+														<span class="text-sm font-medium text-slate-300">{workout.day}</span>
+														<span class={`rounded-lg px-2 py-0.5 text-xs font-medium ${getTypeColor(workout.type)}`}>
+															{workout.type}
+														</span>
+													</div>
+												</div>
+												<div class="text-right">
+													<p class="text-sm font-medium text-white">
+														{workout.distance || workout.duration}
+													</p>
+												</div>
+												{#if workout.status === 'Pending'}
+													<Button
+														onclick={() => toggleDatePicker(workout.id)}
+														variant="ghost"
+														size="sm"
+														class="h-8 w-8 p-0"
+													>
+														<CalendarClock class="h-4 w-4" />
+													</Button>
 												{/if}
 											</div>
-											<div class="flex-1">
-												<div class="flex items-center gap-2">
-													<span class="text-sm font-medium text-slate-300">{workout.day}</span>
-													<span class={`rounded-lg px-2 py-0.5 text-xs font-medium ${getTypeColor(workout.type)}`}>
-														{workout.type}
-													</span>
+
+											{#if showDatePickers.has(workout.id)}
+												<div class="mt-3 flex items-center gap-2 border-t border-slate-700/30 pt-3">
+													<Input
+														type="date"
+														id={`date-${workout.id}`}
+														value={workout.scheduledDate}
+														class="flex-1"
+													/>
+													<Button
+														onclick={() => {
+															const input = document.getElementById(`date-${workout.id}`) as HTMLInputElement;
+															if (input?.value) {
+																rescheduleWorkout(workout.id, input.value);
+															}
+														}}
+														size="sm"
+														disabled={reschedulingWorkouts.has(workout.id)}
+													>
+														{#if reschedulingWorkouts.has(workout.id)}
+															<RefreshCw class="h-4 w-4 animate-spin" />
+														{:else}
+															Reschedule
+														{/if}
+													</Button>
 												</div>
-											</div>
-											<div class="text-right">
-												<p class="text-sm font-medium text-white">
-													{workout.distance || workout.duration}
-												</p>
-											</div>
+											{/if}
 										</div>
 									{/each}
 								</div>
@@ -276,4 +365,3 @@
 		</main>
 	</div>
 </div>
-

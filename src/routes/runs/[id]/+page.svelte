@@ -1,11 +1,40 @@
 <script lang="ts">
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardHeader, CardTitle } from '$lib/components/ui/card';
-	import { ArrowLeft, Calendar, Activity, TrendingUp, Clock, Heart, MessageCircle } from 'lucide-svelte';
+	import { ArrowLeft, Calendar, Activity, TrendingUp, Clock, Heart, MessageCircle, Trash2 } from 'lucide-svelte';
 	import RunMap from '$lib/components/RunMap.svelte';
 	import type { PageData } from './$types';
+	import { goto } from '$app/navigation';
 
 	let { data }: { data: PageData } = $props();
+
+	let deleting = $state(false);
+
+	async function deleteRun() {
+		if (!confirm('Are you sure you want to delete this run? This action cannot be undone.')) {
+			return;
+		}
+
+		deleting = true;
+
+		try {
+			const res = await fetch(`/api/runs/${data.run.garmin_activity_id}`, {
+				method: 'DELETE'
+			});
+
+			if (res.ok) {
+				// Navigate back to home page
+				await goto('/');
+			} else {
+				alert('Failed to delete run');
+			}
+		} catch (err) {
+			console.error('Delete error:', err);
+			alert('Network error');
+		} finally {
+			deleting = false;
+		}
+	}
 </script>
 
 <svelte:head>
@@ -29,6 +58,13 @@
 					</a>
 					<span class="font-display text-lg font-bold text-white">Run Details</span>
 				</div>
+				<Button variant="ghost" size="sm" onclick={deleteRun} disabled={deleting} class="text-rose-400 hover:text-rose-300">
+					{#if deleting}
+						<Trash2 class="h-4 w-4 animate-pulse" />
+					{:else}
+						<Trash2 class="h-4 w-4" />
+					{/if}
+				</Button>
 			</div>
 		</header>
 
