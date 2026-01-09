@@ -564,6 +564,16 @@
 				</CardContent>
 			</Card>
 		</div>
+
+		<!-- Footer -->
+		<footer class="mt-8 border-t border-slate-800/50 py-8 text-center text-sm text-slate-500">
+			<p>Mental health over metrics. Every run counts.</p>
+			{#if import.meta.env.VITE_GIT_SHA}
+				<p class="mt-2 text-xs text-slate-600">
+					v{import.meta.env.VITE_GIT_SHA}
+				</p>
+			{/if}
+		</footer>
 	</div>
 </div>
 

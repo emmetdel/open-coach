@@ -290,6 +290,7 @@
 
     function getConsistencyBars() {
         const weeks = [];
+        // Generate weeks from 7 weeks ago to current week (oldest to newest)
         for (let i = 7; i >= 0; i--) {
             const date = new Date();
             date.setDate(date.getDate() - i * 7);
@@ -496,12 +497,16 @@
     <div class="relative z-10">
         <!-- Header -->
         <header
-            class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl"
+            class="border-b border-slate-800/50 bg-slate-925/90 backdrop-blur-xl sticky top-0 z-50"
         >
             <div
-                class="mx-auto flex max-w-6xl items-center justify-between px-3 py-3 sm:px-6 sm:py-4"
+                class="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6"
             >
-                <div class="flex items-center gap-2 sm:gap-3">
+                <!-- Logo -->
+                <a
+                    href="/"
+                    class="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
+                >
                     <div
                         class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30"
                     >
@@ -511,56 +516,109 @@
                         class="font-display text-lg sm:text-xl font-bold text-white"
                         >OpenCoach</span
                     >
-                </div>
-                <div class="flex items-center gap-0.5 sm:gap-2">
-                    <a href="/plan">
-                        <Button
-                            variant="secondary"
-                            size="sm"
-                            class="h-8 px-2 sm:h-9 sm:px-3"
-                        >
-                            <Calendar class="h-4 w-4" />
-                            <span class="hidden sm:inline">View Plan</span>
+                </a>
+
+                <!-- Desktop Navigation -->
+                <nav class="hidden md:flex items-center gap-1">
+                    <a href="/">
+                        <Button variant="ghost" size="sm" class="h-9 px-4">
+                            <Activity class="h-4 w-4 mr-2" />
+                            Dashboard
                         </Button>
                     </a>
-                    <Button
-                        onclick={() => (showAddRun = true)}
-                        variant="ghost"
-                        size="sm"
-                        title="Add manual run"
-                        class="h-8 w-8 sm:h-9 sm:w-9 p-0"
-                    >
-                        <Plus class="h-4 w-4" />
-                    </Button>
+                    <a href="/analytics">
+                        <Button variant="ghost" size="sm" class="h-9 px-4">
+                            <TrendingUp class="h-4 w-4 mr-2" />
+                            Analytics
+                        </Button>
+                    </a>
+                    <a href="/plan">
+                        <Button variant="ghost" size="sm" class="h-9 px-4">
+                            <Calendar class="h-4 w-4 mr-2" />
+                            Plan
+                        </Button>
+                    </a>
+                </nav>
+
+                <!-- Actions -->
+                <div class="flex items-center gap-1 sm:gap-2">
                     <Button
                         onclick={syncNow}
                         variant="outline"
                         size="sm"
                         disabled={syncing}
-                        class="h-8 px-2 sm:h-9 sm:px-3"
+                        class="h-9 px-3 hidden sm:flex"
                     >
                         <RefreshCw
-                            class={`h-4 w-4 ${syncing ? "animate-spin" : ""}`}
+                            class={`h-4 w-4 sm:mr-2 ${syncing ? "animate-spin" : ""}`}
                         />
                         <span class="hidden sm:inline"
                             >{syncing ? "Syncing..." : "Sync"}</span
                         >
                     </Button>
+                    <Button
+                        onclick={() => (showAddRun = true)}
+                        variant="default"
+                        size="sm"
+                        class="h-9 px-3 bg-forest-600 hover:bg-forest-700"
+                    >
+                        <Plus class="h-4 w-4 sm:mr-2" />
+                        <span class="hidden sm:inline">Add Run</span>
+                    </Button>
                     <a href="/settings">
                         <Button
                             variant="ghost"
                             size="sm"
-                            title="Settings & Goals"
-                            class="h-8 w-8 sm:h-9 sm:w-9 p-0"
+                            title="Settings"
+                            class="h-9 w-9 p-0"
                         >
                             <Settings class="h-4 w-4" />
                         </Button>
                     </a>
                 </div>
             </div>
+
+            <!-- Mobile Navigation -->
+            <div class="md:hidden border-t border-slate-800/50">
+                <nav
+                    class="mx-auto max-w-7xl px-4 py-2 flex items-center justify-around"
+                >
+                    <a
+                        href="/"
+                        class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <Activity class="h-5 w-5" />
+                        <span class="text-xs">Home</span>
+                    </a>
+                    <a
+                        href="/analytics"
+                        class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <TrendingUp class="h-5 w-5" />
+                        <span class="text-xs">Analytics</span>
+                    </a>
+                    <a
+                        href="/plan"
+                        class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <Calendar class="h-5 w-5" />
+                        <span class="text-xs">Plan</span>
+                    </a>
+                    <button
+                        onclick={syncNow}
+                        class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
+                        disabled={syncing}
+                    >
+                        <RefreshCw
+                            class={`h-5 w-5 ${syncing ? "animate-spin" : ""}`}
+                        />
+                        <span class="text-xs">Sync</span>
+                    </button>
+                </nav>
+            </div>
         </header>
 
-        <main class="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
+        <main class="mx-auto max-w-7xl px-3 py-4 sm:px-6 sm:py-8">
             {#if syncMessage}
                 <div
                     class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400"
