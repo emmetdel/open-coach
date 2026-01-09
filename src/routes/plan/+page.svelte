@@ -94,7 +94,7 @@
 	<div class="relative z-10">
 		<!-- Header -->
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
-			<div class="mx-auto flex max-w-4xl items-center justify-between px-6 py-4">
+			<div class="mx-auto flex max-w-4xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
 				<div class="flex items-center gap-3">
 					<a href="/" class="flex items-center gap-3">
 						<img 
@@ -118,7 +118,7 @@
 			</div>
 		</header>
 
-		<main class="mx-auto max-w-4xl px-6 py-8">
+		<main class="mx-auto max-w-4xl px-4 py-6 sm:px-6 sm:py-8">
 			{#if message}
 				<div class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400">
 					{message}

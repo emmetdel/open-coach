@@ -60,7 +60,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		avg_hr: payload.avg_hr ? Math.round(payload.avg_hr) : null,
 		max_hr: payload.max_hr ? Math.round(payload.max_hr) : null,
 		stress_score: null,
-		ai_feedback: null
+		ai_feedback: null,
+		map_polyline: null
 	};
 
 	// Insert run
@@ -113,7 +114,8 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			avg_hr: run.avg_hr ?? null,
 			max_hr: run.max_hr ?? null,
 			stress_score: null,
-			ai_feedback: null
+			ai_feedback: null,
+			map_polyline: null
 		};
 
 		await insertRun(db, runData);

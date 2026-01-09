@@ -38,9 +38,9 @@ export const POST: RequestHandler = async ({ locals }) => {
 		
 		return json({
 			success: result.success,
-			weeksGenerated: result.weeksGenerated || 0,
+			weeksGenerated: result.totalWeeks || 0,
 			message: result.success 
-				? `Generated ${result.weeksGenerated} weeks of training` 
+				? `Generated ${result.totalWeeks} weeks of training` 
 				: result.message || 'Failed to generate plan'
 		});
 	} catch (err) {

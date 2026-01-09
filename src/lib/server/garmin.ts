@@ -22,6 +22,7 @@ export interface GarminActivity {
 	activityType: {
 		typeKey: string;
 	};
+	mapPolyline?: string;
 }
 
 export interface NormalizedRun {
@@ -32,6 +33,7 @@ export interface NormalizedRun {
 	avg_hr: number | null;
 	max_hr: number | null;
 	stress_score: number | null;
+	map_polyline: string | null;
 }
 
 // Get authenticated Garmin client from stored tokens
@@ -134,7 +136,8 @@ export function normalizeActivity(activity: GarminActivity): NormalizedRun {
 		duration_seconds: Math.round(activity.duration || 0),
 		avg_hr: activity.averageHR ? Math.round(activity.averageHR) : null,
 		max_hr: activity.maxHR ? Math.round(activity.maxHR) : null,
-		stress_score: null
+		stress_score: null,
+		map_polyline: activity.mapPolyline || null
 	};
 }
 

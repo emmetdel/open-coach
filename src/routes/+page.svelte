@@ -4,7 +4,7 @@
 	import { Input } from '$lib/components/ui/input';
 	import { Label } from '$lib/components/ui/label';
 	import GarminAuthModal from '$lib/components/GarminAuthModal.svelte';
-	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key, Settings, Flame, Trophy, Lightbulb, Target } from 'lucide-svelte';
+	import { RefreshCw, Activity, TrendingUp, Calendar, MessageCircle, Zap, Plus, X, Key, Settings, Flame, Trophy, Lightbulb, Target, ChevronRight } from 'lucide-svelte';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
@@ -309,18 +309,18 @@
 	<div class="relative z-10">
 		<!-- Header -->
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
-			<div class="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
-				<div class="flex items-center gap-3">
+			<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+				<div class="flex items-center gap-2 sm:gap-3">
 					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30">
 						<Zap class="h-5 w-5 text-white" />
 					</div>
 					<span class="font-display text-xl font-bold text-white">OpenCoach</span>
 				</div>
-				<div class="flex items-center gap-2">
+				<div class="flex items-center gap-1 sm:gap-2">
 					<a href="/plan">
 						<Button variant="secondary" size="sm">
 							<Calendar class="h-4 w-4" />
-							View Plan
+							<span class="hidden sm:inline">View Plan</span>
 						</Button>
 					</a>
 					<Button onclick={() => (showAddRun = true)} variant="ghost" size="sm" title="Add manual run">
@@ -331,7 +331,7 @@
 					</Button>
 					<Button onclick={syncNow} variant="outline" size="sm" disabled={syncing}>
 						<RefreshCw class={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-						{syncing ? 'Syncing...' : 'Sync'}
+						<span class="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
 					</Button>
 					<a href="/setup">
 						<Button variant="ghost" size="sm" title="Settings & Goals">
@@ -342,7 +342,7 @@
 			</div>
 		</header>
 
-		<main class="mx-auto max-w-6xl px-6 py-8">
+		<main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
 			{#if syncMessage}
 				<div class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400">
 					{syncMessage}
@@ -632,35 +632,40 @@
 					{:else}
 						<div class="space-y-4">
 							{#each data.runs as run}
-								<div class="rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-colors hover:border-slate-700/50">
-									<div class="flex items-start justify-between">
-										<div>
-											<p class="font-medium text-slate-200">{run.dateFormatted}</p>
-											<div class="mt-1 flex items-center gap-4 text-sm text-slate-400">
-												<span>{run.distance}</span>
-												<span class="text-slate-600">•</span>
-												<span>{run.duration}</span>
-												<span class="text-slate-600">•</span>
-												<span>{run.pace}</span>
-												{#if run.avg_hr}
+								<a href="/runs/{run.garmin_activity_id}" class="block">
+									<div class="rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-all hover:border-slate-700/50 hover:bg-slate-800/50">
+										<div class="flex items-start justify-between">
+											<div>
+												<p class="font-medium text-slate-200">{run.dateFormatted}</p>
+												<div class="mt-1 flex items-center gap-4 text-sm text-slate-400">
+													<span>{run.distance}</span>
 													<span class="text-slate-600">•</span>
-													<span class="text-coral-400">{run.avg_hr} bpm</span>
-												{/if}
+													<span>{run.duration}</span>
+													<span class="text-slate-600">•</span>
+													<span>{run.pace}</span>
+													{#if run.avg_hr}
+														<span class="text-slate-600">•</span>
+														<span class="text-coral-400">{run.avg_hr} bpm</span>
+													{/if}
+												</div>
+											</div>
+											<div class="text-slate-500">
+												<ChevronRight class="h-5 w-5" />
 											</div>
 										</div>
-									</div>
 
-									{#if run.ai_feedback}
-										<div class="mt-4 flex gap-3">
-											<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-500/20">
-												<MessageCircle class="h-4 w-4 text-forest-400" />
+										{#if run.ai_feedback}
+											<div class="mt-4 flex gap-3">
+												<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-500/20">
+													<MessageCircle class="h-4 w-4 text-forest-400" />
+												</div>
+												<div class="rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 text-sm text-slate-300">
+													{run.ai_feedback}
+												</div>
 											</div>
-											<div class="rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 text-sm text-slate-300">
-												{run.ai_feedback}
-											</div>
-										</div>
-									{/if}
-								</div>
+										{/if}
+									</div>
+								</a>
 							{/each}
 						</div>
 					{/if}

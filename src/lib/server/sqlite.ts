@@ -53,7 +53,7 @@ function runMigrations(database: DatabaseType): void {
 	
 	// Get already applied migrations
 	const applied = new Set(
-		database.prepare('SELECT name FROM _migrations').all().map((r: { name: string }) => r.name)
+		database.prepare('SELECT name FROM _migrations').all().map((r: any) => r.name)
 	);
 	
 	// Get migration files

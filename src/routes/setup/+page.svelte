@@ -271,7 +271,7 @@
 <div class="min-h-screen bg-gradient-to-br from-slate-925 via-slate-900 to-slate-925">
 	<div class="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-forest-900/20 via-transparent to-transparent"></div>
 	
-	<div class="relative z-10 flex min-h-screen items-center justify-center p-6">
+	<div class="relative z-10 flex min-h-screen items-center justify-center p-4 sm:p-6">
 		<div class="w-full max-w-lg">
 			<!-- Logo/Header -->
 			<div class="mb-8 text-center">

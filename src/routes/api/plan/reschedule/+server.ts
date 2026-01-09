@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import type { Database } from 'better-sqlite3';
+import type { LocalDatabase } from '$lib/server/sqlite';
 
 interface RescheduleRequest {
 	planId: string;
@@ -8,7 +8,7 @@ interface RescheduleRequest {
 }
 
 export const POST: RequestHandler = async ({ request, locals }) => {
-	const db = locals.db as Database;
+	const db = locals.db as LocalDatabase;
 	if (!db) {
 		return json({ success: false, error: 'Database not available' }, { status: 500 });
 	}
@@ -22,9 +22,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Get the current plan
-		const plan = db
+		const plan = await db
 			.prepare('SELECT * FROM training_plan WHERE id = ?')
-			.get(planId) as { id: string; scheduled_date: string; type: string; target_distance_km: number; target_duration_minutes: number; description: string; garmin_workout_id: string | null } | undefined;
+			.bind(planId)
+			.first<{ id: string; scheduled_date: string; type: string; target_distance_km: number; target_duration_minutes: number; description: string; garmin_workout_id: string | null }>();
 
 		if (!plan) {
 			return json({ success: false, error: 'Plan not found' }, { status: 404 });
@@ -40,27 +41,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				const tomorrowStr = tomorrow.toISOString().split('T')[0];
 
 				// Check if there's already a run tomorrow
-				const tomorrowPlan = db
+				const tomorrowPlan = await db
 					.prepare('SELECT id FROM training_plan WHERE scheduled_date = ? AND status = ?')
-					.get(tomorrowStr, 'Pending') as { id: string } | undefined;
+					.bind(tomorrowStr, 'Pending')
+					.first<{ id: string }>();
 
 				if (tomorrowPlan) {
 					// Swap: move tomorrow's run to today
-					db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').run(today, tomorrowPlan.id);
+					await db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').bind(today, tomorrowPlan.id).run();
 				}
 
 				// Move today's run to tomorrow
-				db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').run(tomorrowStr, planId);
+				await db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').bind(tomorrowStr, planId).run();
 
 				// Update Garmin if needed (delete and recreate)
 				if (plan.garmin_workout_id) {
-					const { deleteGarminWorkout, pushWorkoutToGarmin } = await import('$lib/server/garmin');
+					const { deleteGarminWorkout, pushWeekToGarmin } = await import('$lib/server/garmin');
 					await deleteGarminWorkout(db, plan.garmin_workout_id);
-					db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').run(planId);
+					await db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').bind(planId).run();
 					
 					// Re-sync workouts for the next 7 days
-					const { syncWorkoutsToGarmin } = await import('$lib/server/garmin');
-					await syncWorkoutsToGarmin(db);
+					await pushWeekToGarmin(db);
 				}
 
 				return json({
@@ -73,26 +74,27 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			case 'swap_next': {
 				// Find the next scheduled run after today
-				const nextPlan = db
+				const nextPlan = await db
 					.prepare(`
 						SELECT id, scheduled_date FROM training_plan 
 						WHERE scheduled_date > ? AND status = ? 
 						ORDER BY scheduled_date ASC LIMIT 1
 					`)
-					.get(today, 'Pending') as { id: string; scheduled_date: string } | undefined;
+					.bind(today, 'Pending')
+					.first<{ id: string; scheduled_date: string }>();
 
 				if (!nextPlan) {
 					return json({ success: false, error: 'No upcoming run to swap with' }, { status: 400 });
 				}
 
 				// Swap the dates
-				db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').run(nextPlan.scheduled_date, planId);
-				db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').run(today, nextPlan.id);
+				await db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').bind(nextPlan.scheduled_date, planId).run();
+				await db.prepare('UPDATE training_plan SET scheduled_date = ? WHERE id = ?').bind(today, nextPlan.id).run();
 
 				// Re-sync Garmin workouts
 				if (plan.garmin_workout_id) {
-					const { syncWorkoutsToGarmin } = await import('$lib/server/garmin');
-					await syncWorkoutsToGarmin(db);
+					const { pushWeekToGarmin } = await import('$lib/server/garmin');
+					await pushWeekToGarmin(db);
 				}
 
 				const swapDate = new Date(nextPlan.scheduled_date + 'T12:00:00').toLocaleDateString('en-US', {
@@ -107,20 +109,20 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			case 'convert_walk': {
 				// Convert today's run to an easy 20-minute walk
-				db.prepare(`
+				await db.prepare(`
 					UPDATE training_plan 
 					SET type = 'Walk', 
 					    target_distance_km = NULL, 
 					    target_duration_minutes = 20,
 					    description = 'Recovery walk - take it easy and enjoy being outside'
 					WHERE id = ?
-				`).run(planId);
+				`).bind(planId).run();
 
 				// Delete the Garmin workout if exists (walks don't need structured workouts)
 				if (plan.garmin_workout_id) {
 					const { deleteGarminWorkout } = await import('$lib/server/garmin');
 					await deleteGarminWorkout(db, plan.garmin_workout_id);
-					db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').run(planId);
+					await db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').bind(planId).run();
 				}
 
 				return json({
@@ -131,18 +133,18 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 			case 'skip': {
 				// Mark as skipped with a note
-				db.prepare(`
+				await db.prepare(`
 					UPDATE training_plan 
 					SET status = 'Skipped',
 					    description = description || ' [Skipped for recovery]'
 					WHERE id = ?
-				`).run(planId);
+				`).bind(planId).run();
 
 				// Delete the Garmin workout
 				if (plan.garmin_workout_id) {
 					const { deleteGarminWorkout } = await import('$lib/server/garmin');
 					await deleteGarminWorkout(db, plan.garmin_workout_id);
-					db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').run(planId);
+					await db.prepare('UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?').bind(planId).run();
 				}
 
 				return json({
@@ -162,5 +164,3 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		);
 	}
 };
-
-

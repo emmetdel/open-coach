@@ -16,6 +16,7 @@ export interface Run {
 	max_hr: number | null;
 	stress_score: number | null;
 	ai_feedback: string | null;
+	map_polyline: string | null;
 	synced_to_calendar: boolean;
 }
 
@@ -167,8 +168,8 @@ export async function getRunByActivityId(
 export async function insertRun(db: Database, run: Omit<Run, 'synced_to_calendar'>): Promise<void> {
 	await db
 		.prepare(
-			`INSERT INTO runs (garmin_activity_id, date, distance_meters, duration_seconds, avg_hr, max_hr, stress_score, ai_feedback)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+			`INSERT INTO runs (garmin_activity_id, date, distance_meters, duration_seconds, avg_hr, max_hr, stress_score, ai_feedback, map_polyline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 		)
 		.bind(
 			run.garmin_activity_id,
@@ -178,7 +179,8 @@ export async function insertRun(db: Database, run: Omit<Run, 'synced_to_calendar
 			run.avg_hr,
 			run.max_hr,
 			run.stress_score,
-			run.ai_feedback
+			run.ai_feedback,
+			run.map_polyline
 		)
 		.run();
 }
