@@ -17,7 +17,7 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 
 - **Framework**: SvelteKit (TypeScript)
 - **Deployment**: Docker or standalone Node.js
-- **Database**: SQLite (via better-sqlite3)
+- **Database**: SQLite (via bun:sqlite)
 - **Styling**: Tailwind CSS v4 + Custom Components
 - **AI**: OpenRouter (access to Claude, GPT-4, Gemini, Llama, DeepSeek, and more)
 - **Garmin**: garmin-connect npm package (native TypeScript)

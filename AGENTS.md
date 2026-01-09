@@ -10,7 +10,7 @@
 
 * **Framework:** SvelteKit (TypeScript)
 * **Deployment:** Docker or standalone Node.js
-* **Database:** SQLite (via better-sqlite3)
+* **Database:** SQLite (via bun:sqlite)
 * **Styling:** Tailwind CSS + `shadcn-svelte` (for UI components)
 * **AI Engine:** OpenRouter API (Claude, GPT-4, Gemini, etc.)
 * **Integrations:**
