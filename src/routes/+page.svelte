@@ -212,20 +212,20 @@
 
 	<!-- Import Tokens Modal -->
 	{#if showImportTokens}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-			<div class="mx-4 w-full max-w-lg rounded-2xl border border-slate-700/50 bg-slate-850 p-6 shadow-2xl">
-				<div class="mb-6 flex items-center justify-between">
-					<h2 class="font-display text-xl font-bold text-white">Import Garmin Tokens</h2>
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3">
+			<div class="w-full max-w-lg rounded-2xl border border-slate-700/50 bg-slate-850 p-4 sm:p-6 shadow-2xl">
+				<div class="mb-4 sm:mb-6 flex items-center justify-between">
+					<h2 class="font-display text-lg sm:text-xl font-bold text-white">Import Garmin Tokens</h2>
 					<button onclick={() => (showImportTokens = false)} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
 						<X class="h-5 w-5" />
 					</button>
 				</div>
 
-				<div class="mb-4 rounded-lg bg-slate-800/50 p-4 text-sm text-slate-300">
+				<div class="mb-4 rounded-lg bg-slate-800/50 p-3 sm:p-4 text-xs sm:text-sm text-slate-300">
 					<p class="mb-2"><strong>Manual token import:</strong></p>
 					<p class="text-slate-400">
 						If you have OAuth tokens from another source, paste the JSON below.
-						Format: <code class="rounded bg-slate-700 px-1">{`{"oauth1": {...}, "oauth2": {...}}`}</code>
+						Format: <code class="rounded bg-slate-700 px-1 text-xs">{`{"oauth1": {...}, "oauth2": {...}}`}</code>
 					</p>
 				</div>
 
@@ -237,11 +237,11 @@
 							bind:value={tokenJson}
 							placeholder={'{"oauth1": {...}, "oauth2": {...}}'}
 							rows="6"
-							class="w-full rounded-xl border border-slate-700 bg-slate-800 px-4 py-3 font-mono text-sm text-slate-100 placeholder:text-slate-500 focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500/20"
+							class="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2 sm:px-4 sm:py-3 font-mono text-xs sm:text-sm text-slate-100 placeholder:text-slate-500 focus:border-forest-500 focus:outline-none focus:ring-2 focus:ring-forest-500/20"
 						></textarea>
 					</div>
 
-					<div class="flex gap-3 pt-2">
+					<div class="flex gap-2 sm:gap-3 pt-2">
 						<Button type="button" variant="outline" onclick={() => (showImportTokens = false)} class="flex-1">
 							Cancel
 						</Button>
@@ -256,10 +256,10 @@
 
 	<!-- Add Run Modal -->
 	{#if showAddRun}
-		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-			<div class="mx-4 w-full max-w-md rounded-2xl border border-slate-700/50 bg-slate-850 p-6 shadow-2xl">
-				<div class="mb-6 flex items-center justify-between">
-					<h2 class="font-display text-xl font-bold text-white">Add Run Manually</h2>
+		<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3">
+			<div class="w-full max-w-md rounded-2xl border border-slate-700/50 bg-slate-850 p-4 sm:p-6 shadow-2xl">
+				<div class="mb-4 sm:mb-6 flex items-center justify-between">
+					<h2 class="font-display text-lg sm:text-xl font-bold text-white">Add Run Manually</h2>
 					<button onclick={() => (showAddRun = false)} class="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
 						<X class="h-5 w-5" />
 					</button>
@@ -271,7 +271,7 @@
 						<Input id="run-date" type="date" bind:value={runDate} />
 					</div>
 
-					<div class="grid grid-cols-2 gap-4">
+					<div class="grid grid-cols-2 gap-3 sm:gap-4">
 						<div class="space-y-2">
 							<Label for="run-distance">Distance (km)</Label>
 							<Input id="run-distance" type="number" step="0.1" placeholder="5.0" bind:value={runDistance} />
@@ -287,7 +287,7 @@
 						<Input id="run-hr" type="number" placeholder="145" bind:value={runHr} />
 					</div>
 
-					<div class="flex gap-3 pt-4">
+					<div class="flex gap-2 sm:gap-3 pt-2 sm:pt-4">
 						<Button type="button" variant="outline" onclick={() => (showAddRun = false)} class="flex-1">
 							Cancel
 						</Button>
@@ -309,32 +309,29 @@
 	<div class="relative z-10">
 		<!-- Header -->
 		<header class="border-b border-slate-800/50 bg-slate-925/80 backdrop-blur-xl">
-			<div class="mx-auto flex max-w-6xl items-center justify-between px-4 py-3 sm:px-6 sm:py-4">
+			<div class="mx-auto flex max-w-6xl items-center justify-between px-3 py-3 sm:px-6 sm:py-4">
 				<div class="flex items-center gap-2 sm:gap-3">
-					<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30">
-						<Zap class="h-5 w-5 text-white" />
+					<div class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30">
+						<Zap class="h-4 w-4 sm:h-5 sm:w-5 text-white" />
 					</div>
-					<span class="font-display text-xl font-bold text-white">OpenCoach</span>
+					<span class="font-display text-lg sm:text-xl font-bold text-white">OpenCoach</span>
 				</div>
-				<div class="flex items-center gap-1 sm:gap-2">
+				<div class="flex items-center gap-0.5 sm:gap-2">
 					<a href="/plan">
-						<Button variant="secondary" size="sm">
+						<Button variant="secondary" size="sm" class="h-8 px-2 sm:h-9 sm:px-3">
 							<Calendar class="h-4 w-4" />
 							<span class="hidden sm:inline">View Plan</span>
 						</Button>
 					</a>
-					<Button onclick={() => (showAddRun = true)} variant="ghost" size="sm" title="Add manual run">
+					<Button onclick={() => (showAddRun = true)} variant="ghost" size="sm" title="Add manual run" class="h-8 w-8 sm:h-9 sm:w-9 p-0">
 						<Plus class="h-4 w-4" />
 					</Button>
-					<Button onclick={() => (showImportTokens = true)} variant="ghost" size="sm" title="Import Garmin tokens">
-						<Key class="h-4 w-4" />
-					</Button>
-					<Button onclick={syncNow} variant="outline" size="sm" disabled={syncing}>
+					<Button onclick={syncNow} variant="outline" size="sm" disabled={syncing} class="h-8 px-2 sm:h-9 sm:px-3">
 						<RefreshCw class={`h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
 						<span class="hidden sm:inline">{syncing ? 'Syncing...' : 'Sync'}</span>
 					</Button>
 					<a href="/setup">
-						<Button variant="ghost" size="sm" title="Settings & Goals">
+						<Button variant="ghost" size="sm" title="Settings & Goals" class="h-8 w-8 sm:h-9 sm:w-9 p-0">
 							<Settings class="h-4 w-4" />
 						</Button>
 					</a>
@@ -342,7 +339,7 @@
 			</div>
 		</header>
 
-		<main class="mx-auto max-w-6xl px-4 py-6 sm:px-6 sm:py-8">
+		<main class="mx-auto max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
 			{#if syncMessage}
 				<div class="mb-6 rounded-xl bg-forest-500/10 px-4 py-3 text-sm text-forest-400">
 					{syncMessage}
@@ -351,21 +348,21 @@
 
 			<!-- Next Run Hero -->
 			{#if data.nextRun}
-				<Card class="mb-8 border-forest-500/30 bg-gradient-to-br from-forest-900/20 to-slate-900">
-					<CardContent class="p-6">
+				<Card class="mb-6 sm:mb-8 border-forest-500/30 bg-gradient-to-br from-forest-900/20 to-slate-900">
+					<CardContent class="p-4 sm:p-6">
 						<div class="flex items-center justify-between">
-							<div>
-								<p class="text-sm font-medium uppercase tracking-wider text-forest-400">Next Run</p>
-								<h2 class="mt-1 font-display text-2xl font-bold text-white">{data.nextRun.dateFormatted}</h2>
-								<div class="mt-2 flex items-center gap-3">
-									<span class="rounded-lg bg-forest-500/20 px-3 py-1 text-sm font-medium text-forest-300">
+							<div class="flex-1">
+								<p class="text-xs sm:text-sm font-medium uppercase tracking-wider text-forest-400">Next Run</p>
+								<h2 class="mt-1 font-display text-xl sm:text-2xl font-bold text-white">{data.nextRun.dateFormatted}</h2>
+								<div class="mt-2 flex flex-wrap items-center gap-2 sm:gap-3">
+									<span class="rounded-lg bg-forest-500/20 px-2.5 py-1 text-xs sm:text-sm font-medium text-forest-300">
 										{data.nextRun.type}
 									</span>
-									<span class="text-lg font-semibold text-slate-200">{data.nextRun.distance}</span>
+									<span class="text-base sm:text-lg font-semibold text-slate-200">{data.nextRun.distance}</span>
 								</div>
-								<p class="mt-2 text-sm text-slate-400">{data.nextRun.description}</p>
+								<p class="mt-2 text-xs sm:text-sm text-slate-400">{data.nextRun.description}</p>
 							</div>
-							<div class="hidden sm:block">
+							<div class="hidden sm:block ml-4">
 								<div class="flex h-20 w-20 items-center justify-center rounded-2xl bg-forest-500/20">
 									<Calendar class="h-10 w-10 text-forest-400" />
 								</div>
@@ -375,10 +372,10 @@
 				</Card>
 			{:else}
 				<!-- No plan - prompt to generate -->
-				<Card class="mb-8 border-slate-700/50 bg-gradient-to-br from-slate-850 to-slate-900">
+				<Card class="mb-6 sm:mb-8 border-slate-700/50 bg-gradient-to-br from-slate-850 to-slate-900">
 					<CardContent class="p-6 text-center">
-						<Calendar class="mx-auto h-12 w-12 text-slate-500" />
-						<h2 class="mt-4 font-display text-xl font-bold text-white">No Runs Planned</h2>
+						<Calendar class="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-slate-500" />
+						<h2 class="mt-4 font-display text-lg sm:text-xl font-bold text-white">No Runs Planned</h2>
 						<p class="mt-2 text-sm text-slate-400">
 							Generate a training plan based on your goals and availability.
 						</p>
@@ -397,28 +394,28 @@
 
 			<!-- Upcoming Runs -->
 			{#if data.upcomingPlans.length > 0}
-				<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-					<CardHeader class="flex flex-row items-center justify-between">
-						<CardTitle class="flex items-center gap-2 text-lg">
+				<Card class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
+					<CardHeader class="flex flex-row items-center justify-between p-4 sm:p-6">
+						<CardTitle class="flex items-center gap-2 text-base sm:text-lg">
 							<div class="h-2 w-2 rounded-full bg-coral-500"></div>
 							Upcoming Runs
 						</CardTitle>
-						<Button onclick={generatePlan} variant="ghost" size="sm" disabled={generatingPlan}>
+						<Button onclick={generatePlan} variant="ghost" size="sm" disabled={generatingPlan} class="h-8 sm:h-9">
 							<RefreshCw class={`h-4 w-4 ${generatingPlan ? 'animate-spin' : ''}`} />
-							Regenerate
+							<span class="hidden sm:inline">Regenerate</span>
 						</Button>
 					</CardHeader>
-					<CardContent>
+					<CardContent class="p-4 sm:p-6 pt-0 sm:pt-0">
 						<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 							{#each data.upcomingPlans as plan}
-								<div class="rounded-xl border border-slate-700/50 bg-slate-800/50 p-4">
+								<div class="rounded-xl border border-slate-700/50 bg-slate-800/50 p-3 sm:p-4">
 									<div class="flex items-center justify-between">
-										<span class="text-sm font-medium text-slate-300">{plan.dayName}</span>
+										<span class="text-xs sm:text-sm font-medium text-slate-300">{plan.dayName}</span>
 										<span class="rounded-lg bg-slate-700/50 px-2 py-0.5 text-xs font-medium text-slate-400">
 											{plan.type}
 										</span>
 									</div>
-									<p class="mt-1 font-display text-lg font-bold text-white">{plan.distance}</p>
+									<p class="mt-1 font-display text-base sm:text-lg font-bold text-white">{plan.distance}</p>
 									<p class="mt-1 text-xs text-slate-500">{plan.dateFormatted}</p>
 								</div>
 							{/each}
@@ -428,44 +425,44 @@
 			{/if}
 
 			<!-- Stats Grid -->
-			<div class="mb-8 grid gap-4 sm:grid-cols-3">
+			<div class="mb-6 sm:mb-8 grid gap-3 sm:gap-4 sm:grid-cols-3">
 				<Card class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-					<CardContent class="p-6">
-						<div class="flex items-center gap-4">
-							<div class="flex h-12 w-12 items-center justify-center rounded-xl bg-forest-500/20">
-								<Activity class="h-6 w-6 text-forest-400" />
+					<CardContent class="p-4 sm:p-6">
+						<div class="flex items-center gap-3 sm:gap-4">
+							<div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-forest-500/20 shrink-0">
+								<Activity class="h-5 w-5 sm:h-6 sm:w-6 text-forest-400" />
 							</div>
-							<div>
-								<p class="text-sm text-slate-400">Total Runs</p>
-								<p class="font-display text-2xl font-bold text-white">{data.stats.totalRuns}</p>
+							<div class="min-w-0">
+								<p class="text-xs sm:text-sm text-slate-400">Total Runs</p>
+								<p class="font-display text-xl sm:text-2xl font-bold text-white">{data.stats.totalRuns}</p>
 							</div>
 						</div>
 					</CardContent>
 				</Card>
 
 				<Card class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-					<CardContent class="p-6">
-						<div class="flex items-center gap-4">
-							<div class="flex h-12 w-12 items-center justify-center rounded-xl bg-coral-500/20">
-								<TrendingUp class="h-6 w-6 text-coral-400" />
+					<CardContent class="p-4 sm:p-6">
+						<div class="flex items-center gap-3 sm:gap-4">
+							<div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-coral-500/20 shrink-0">
+								<TrendingUp class="h-5 w-5 sm:h-6 sm:w-6 text-coral-400" />
 							</div>
-							<div>
-								<p class="text-sm text-slate-400">Total Distance</p>
-								<p class="font-display text-2xl font-bold text-white">{data.stats.totalDistance}</p>
+							<div class="min-w-0">
+								<p class="text-xs sm:text-sm text-slate-400">Total Distance</p>
+								<p class="font-display text-xl sm:text-2xl font-bold text-white">{data.stats.totalDistance}</p>
 							</div>
 						</div>
 					</CardContent>
 				</Card>
 
 				<Card class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-					<CardContent class="p-6">
-						<div class="flex items-center gap-4">
-							<div class="flex h-12 w-12 items-center justify-center rounded-xl bg-purple-500/20">
-								<Calendar class="h-6 w-6 text-purple-400" />
+					<CardContent class="p-4 sm:p-6">
+						<div class="flex items-center gap-3 sm:gap-4">
+							<div class="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-xl bg-purple-500/20 shrink-0">
+								<Calendar class="h-5 w-5 sm:h-6 sm:w-6 text-purple-400" />
 							</div>
-							<div>
-								<p class="text-sm text-slate-400">Avg Runs/Week</p>
-								<p class="font-display text-2xl font-bold text-white">{data.stats.avgWeeklyRuns}</p>
+							<div class="min-w-0">
+								<p class="text-xs sm:text-sm text-slate-400">Avg Runs/Week</p>
+								<p class="font-display text-xl sm:text-2xl font-bold text-white">{data.stats.avgWeeklyRuns}</p>
 							</div>
 						</div>
 					</CardContent>
@@ -473,36 +470,36 @@
 			</div>
 
 			<!-- Streak & Motivation Row -->
-			<div class="mb-8 grid gap-4 sm:grid-cols-2">
+			<div class="mb-6 sm:mb-8 grid gap-3 sm:gap-4 sm:grid-cols-2">
 				<!-- Streak Card -->
 				<Card class="border-amber-500/20 bg-gradient-to-br from-amber-900/10 to-slate-900">
-					<CardContent class="p-6">
+					<CardContent class="p-4 sm:p-6">
 						<div class="flex items-center justify-between">
-							<div>
+							<div class="flex-1">
 								<div class="flex items-center gap-2">
-									<Flame class="h-5 w-5 text-amber-400" />
-									<p class="text-sm font-medium text-amber-400">Current Streak</p>
+									<Flame class="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
+									<p class="text-xs sm:text-sm font-medium text-amber-400">Current Streak</p>
 								</div>
-								<p class="mt-2 font-display text-4xl font-bold text-white">
+								<p class="mt-2 font-display text-3xl sm:text-4xl font-bold text-white">
 									{data.streak.current}
-									<span class="text-lg font-normal text-slate-400">runs</span>
+									<span class="text-base sm:text-lg font-normal text-slate-400">runs</span>
 								</p>
 								{#if data.streak.longest > data.streak.current}
-									<p class="mt-1 text-sm text-slate-500">
+									<p class="mt-1 text-xs sm:text-sm text-slate-500">
 										Best: {data.streak.longest} runs
 									</p>
 								{/if}
 							</div>
-							<div class="flex h-16 w-16 items-center justify-center rounded-2xl bg-amber-500/20">
-								<Trophy class="h-8 w-8 text-amber-400" />
+							<div class="flex h-12 w-12 sm:h-16 sm:w-16 items-center justify-center rounded-2xl bg-amber-500/20 shrink-0 ml-2">
+								<Trophy class="h-6 w-6 sm:h-8 sm:w-8 text-amber-400" />
 							</div>
 						</div>
 						{#if data.streak.current >= 3}
-							<p class="mt-4 text-sm text-amber-300/80">
-								🔥 Don't break the chain! You're on fire!
+							<p class="mt-4 text-xs sm:text-sm text-amber-300/80">
+								Don't break the chain! You're on fire!
 							</p>
 						{:else if data.streak.current === 0}
-							<p class="mt-4 text-sm text-slate-400">
+							<p class="mt-4 text-xs sm:text-sm text-slate-400">
 								Complete your next scheduled run to start a streak!
 							</p>
 						{/if}
@@ -511,12 +508,12 @@
 
 				<!-- Tips Card -->
 				<Card class="border-sky-500/20 bg-gradient-to-br from-sky-900/10 to-slate-900">
-					<CardContent class="p-6">
+					<CardContent class="p-4 sm:p-6">
 						<div class="flex items-center gap-2 mb-3">
-							<Lightbulb class="h-5 w-5 text-sky-400" />
-							<p class="text-sm font-medium text-sky-400">Coach's Tip</p>
+							<Lightbulb class="h-4 w-4 sm:h-5 sm:w-5 text-sky-400" />
+							<p class="text-xs sm:text-sm font-medium text-sky-400">Coach's Tip</p>
 						</div>
-						<p class="text-slate-200 leading-relaxed">
+						<p class="text-sm sm:text-base text-slate-200 leading-relaxed">
 							{data.tips[Math.floor(Math.random() * data.tips.length)]}
 						</p>
 						{#if data.nextRun}
@@ -530,48 +527,48 @@
 
 			<!-- Progress Card (if user has runs) -->
 			{#if data.progress.totalRuns > 0}
-				<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-					<CardHeader>
-						<CardTitle class="flex items-center gap-2 text-lg">
-							<Target class="h-5 w-5 text-forest-400" />
+				<Card class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
+					<CardHeader class="p-4 sm:p-6">
+						<CardTitle class="flex items-center gap-2 text-base sm:text-lg">
+							<Target class="h-4 w-4 sm:h-5 sm:w-5 text-forest-400" />
 							Your Progress
 						</CardTitle>
 					</CardHeader>
-					<CardContent>
-						<div class="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+					<CardContent class="p-4 sm:p-6 pt-0 sm:pt-0">
+						<div class="grid gap-4 sm:gap-6 grid-cols-2 lg:grid-cols-4">
 							<div>
-								<p class="text-sm text-slate-400">Total Distance</p>
-								<p class="font-display text-2xl font-bold text-white">{data.progress.totalDistance} km</p>
+								<p class="text-xs sm:text-sm text-slate-400">Total Distance</p>
+								<p class="font-display text-lg sm:text-2xl font-bold text-white">{data.progress.totalDistance} km</p>
 							</div>
 							<div>
-								<p class="text-sm text-slate-400">Total Time</p>
-								<p class="font-display text-2xl font-bold text-white">{data.progress.totalDuration} min</p>
+								<p class="text-xs sm:text-sm text-slate-400">Total Time</p>
+								<p class="font-display text-lg sm:text-2xl font-bold text-white">{data.progress.totalDuration} min</p>
 							</div>
 							<div>
-								<p class="text-sm text-slate-400">Runs Completed</p>
-								<p class="font-display text-2xl font-bold text-white">{data.progress.totalRuns}</p>
+								<p class="text-xs sm:text-sm text-slate-400">Runs Completed</p>
+								<p class="font-display text-lg sm:text-2xl font-bold text-white">{data.progress.totalRuns}</p>
 							</div>
 							{#if data.progress.paceImprovement}
 								<div>
-									<p class="text-sm text-slate-400">Pace Improvement</p>
-									<p class="font-display text-2xl font-bold text-forest-400">+{data.progress.paceImprovement}</p>
+									<p class="text-xs sm:text-sm text-slate-400">Pace Improvement</p>
+									<p class="font-display text-lg sm:text-2xl font-bold text-forest-400">+{data.progress.paceImprovement}</p>
 								</div>
 							{/if}
 						</div>
 
 						{#if data.progress.firstRun && data.progress.latestRun && data.progress.totalRuns > 1}
-							<div class="mt-6 rounded-xl bg-slate-800/50 p-4">
-								<p class="text-sm font-medium text-slate-300 mb-3">Your Journey</p>
-								<div class="flex items-center gap-4">
-									<div class="flex-1 rounded-lg bg-slate-700/50 p-3">
+							<div class="mt-4 sm:mt-6 rounded-xl bg-slate-800/50 p-3 sm:p-4">
+								<p class="text-xs sm:text-sm font-medium text-slate-300 mb-3">Your Journey</p>
+								<div class="flex items-center gap-2 sm:gap-4">
+									<div class="flex-1 rounded-lg bg-slate-700/50 p-2.5 sm:p-3">
 										<p class="text-xs text-slate-500">First Run</p>
-										<p class="font-medium text-slate-200">{data.progress.firstRun.distance.toFixed(1)} km</p>
+										<p class="text-sm sm:text-base font-medium text-slate-200">{data.progress.firstRun.distance.toFixed(1)} km</p>
 										<p class="text-xs text-slate-500">{new Date(data.progress.firstRun.date).toLocaleDateString()}</p>
 									</div>
-									<div class="text-forest-400">→</div>
-									<div class="flex-1 rounded-lg bg-forest-500/20 p-3">
+									<div class="text-forest-400 text-sm sm:text-base">→</div>
+									<div class="flex-1 rounded-lg bg-forest-500/20 p-2.5 sm:p-3">
 										<p class="text-xs text-forest-400">Latest Run</p>
-										<p class="font-medium text-forest-200">{data.progress.latestRun.distance.toFixed(1)} km</p>
+										<p class="text-sm sm:text-base font-medium text-forest-200">{data.progress.latestRun.distance.toFixed(1)} km</p>
 										<p class="text-xs text-forest-400">{new Date(data.progress.latestRun.date).toLocaleDateString()}</p>
 									</div>
 								</div>
@@ -582,17 +579,17 @@
 			{/if}
 
 			<!-- Consistency Chart -->
-			<Card class="mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-				<CardHeader>
-					<CardTitle class="flex items-center gap-2 text-lg">
+			<Card class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
+				<CardHeader class="p-4 sm:p-6">
+					<CardTitle class="flex items-center gap-2 text-base sm:text-lg">
 						<div class="h-2 w-2 rounded-full bg-forest-500"></div>
 						Consistency
 					</CardTitle>
 				</CardHeader>
-				<CardContent>
-					<div class="grid grid-cols-8 items-end gap-2" style="height: 100px;">
+				<CardContent class="p-4 sm:p-6 pt-0 sm:pt-0">
+					<div class="grid grid-cols-8 items-end gap-1.5 sm:gap-2" style="height: 80px; sm:height: 100px;">
 						{#each consistencyBars as bar, i}
-							{@const barHeight = bar.count > 0 ? Math.round((bar.count / maxCount) * 100) : 8}
+							{@const barHeight = bar.count > 0 ? Math.round((bar.count / maxCount) * 80) : 6}
 							<div
 								class="w-full rounded-t-lg transition-all duration-500 {bar.count > 0 ? 'bg-gradient-to-t from-forest-600 to-forest-400' : 'bg-slate-700/50'}"
 								style="height: {barHeight}px;"
@@ -600,12 +597,12 @@
 							></div>
 						{/each}
 					</div>
-					<div class="mt-2 grid grid-cols-8 gap-2">
+					<div class="mt-2 grid grid-cols-8 gap-1.5 sm:gap-2">
 						{#each consistencyBars as _, i}
 							<span class="text-center text-xs text-slate-500">W{i + 1}</span>
 						{/each}
 					</div>
-					<p class="mt-4 text-center text-sm text-slate-400">
+					<p class="mt-3 sm:mt-4 text-center text-xs sm:text-sm text-slate-400">
 						Last 8 weeks • {consistencyBars.filter((b) => b.count > 0).length} active weeks
 					</p>
 				</CardContent>
@@ -613,15 +610,15 @@
 
 			<!-- Recent Runs -->
 			<Card class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900">
-				<CardHeader>
-					<CardTitle class="text-lg">Recent Runs</CardTitle>
+				<CardHeader class="p-4 sm:p-6">
+					<CardTitle class="text-base sm:text-lg">Recent Runs</CardTitle>
 				</CardHeader>
-				<CardContent>
+				<CardContent class="p-4 sm:p-6 pt-0 sm:pt-0">
 					{#if data.runs.length === 0}
-						<div class="py-12 text-center">
-							<Activity class="mx-auto mb-4 h-12 w-12 text-slate-600" />
-							<p class="text-slate-400">No runs yet.</p>
-							<p class="mt-1 text-sm text-slate-500">
+						<div class="py-8 sm:py-12 text-center">
+							<Activity class="mx-auto mb-4 h-10 w-10 sm:h-12 sm:w-12 text-slate-600" />
+							<p class="text-sm sm:text-base text-slate-400">No runs yet.</p>
+							<p class="mt-1 text-xs sm:text-sm text-slate-500">
 								Add a run manually or sync from Garmin.
 							</p>
 							<Button onclick={() => (showAddRun = true)} class="mt-4">
@@ -630,36 +627,36 @@
 							</Button>
 						</div>
 					{:else}
-						<div class="space-y-4">
+						<div class="space-y-3 sm:space-y-4">
 							{#each data.runs as run}
 								<a href="/runs/{run.garmin_activity_id}" class="block">
-									<div class="rounded-xl border border-slate-800/50 bg-slate-900/50 p-4 transition-all hover:border-slate-700/50 hover:bg-slate-800/50">
-										<div class="flex items-start justify-between">
-											<div>
-												<p class="font-medium text-slate-200">{run.dateFormatted}</p>
-												<div class="mt-1 flex items-center gap-4 text-sm text-slate-400">
+									<div class="rounded-xl border border-slate-800/50 bg-slate-900/50 p-3 sm:p-4 transition-all hover:border-slate-700/50 hover:bg-slate-800/50">
+										<div class="flex items-start justify-between gap-2">
+											<div class="flex-1 min-w-0">
+												<p class="font-medium text-sm sm:text-base text-slate-200">{run.dateFormatted}</p>
+												<div class="mt-1 flex flex-wrap items-center gap-2 sm:gap-3 text-xs sm:text-sm text-slate-400">
 													<span>{run.distance}</span>
 													<span class="text-slate-600">•</span>
 													<span>{run.duration}</span>
 													<span class="text-slate-600">•</span>
-													<span>{run.pace}</span>
+													<span class="hidden sm:inline">{run.pace}</span>
 													{#if run.avg_hr}
-														<span class="text-slate-600">•</span>
+														<span class="hidden sm:inline text-slate-600">•</span>
 														<span class="text-coral-400">{run.avg_hr} bpm</span>
 													{/if}
 												</div>
 											</div>
-											<div class="text-slate-500">
-												<ChevronRight class="h-5 w-5" />
+											<div class="text-slate-500 shrink-0">
+												<ChevronRight class="h-4 w-4 sm:h-5 sm:w-5" />
 											</div>
 										</div>
 
 										{#if run.ai_feedback}
-											<div class="mt-4 flex gap-3">
-												<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-forest-500/20">
-													<MessageCircle class="h-4 w-4 text-forest-400" />
+											<div class="mt-3 sm:mt-4 flex gap-2 sm:gap-3">
+												<div class="flex h-7 w-7 sm:h-8 sm:w-8 shrink-0 items-center justify-center rounded-full bg-forest-500/20">
+													<MessageCircle class="h-3.5 w-3.5 sm:h-4 sm:w-4 text-forest-400" />
 												</div>
-												<div class="rounded-2xl rounded-tl-sm bg-slate-800/80 px-4 py-3 text-sm text-slate-300">
+												<div class="rounded-2xl rounded-tl-sm bg-slate-800/80 px-3 py-2 sm:px-4 sm:py-3 text-xs sm:text-sm text-slate-300">
 													{run.ai_feedback}
 												</div>
 											</div>
@@ -674,7 +671,7 @@
 		</main>
 
 		<!-- Footer -->
-		<footer class="border-t border-slate-800/50 py-8 text-center text-sm text-slate-500">
+		<footer class="border-t border-slate-800/50 py-6 sm:py-8 text-center text-xs sm:text-sm text-slate-500">
 			<p>Mental health over metrics. Every run counts.</p>
 		</footer>
 	</div>

@@ -1,293 +1,400 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
 @theme {
-	--font-display: 'Outfit', system-ui, sans-serif;
-	--font-body: 'Nunito', system-ui, sans-serif;
+    --font-display: "Outfit", system-ui, sans-serif;
+    --font-body: "Nunito", system-ui, sans-serif;
 
-	/* Forest theme (default) */
-	--color-forest-50: #f0fdf4;
-	--color-forest-100: #dcfce7;
-	--color-forest-200: #bbf7d0;
-	--color-forest-300: #86efac;
-	--color-forest-400: #4ade80;
-	--color-forest-500: #22c55e;
-	--color-forest-600: #16a34a;
-	--color-forest-700: #15803d;
-	--color-forest-800: #166534;
-	--color-forest-900: #14532d;
-	--color-forest-950: #052e16;
+    /* Forest theme (default) */
+    --color-forest-50: #f0fdf4;
+    --color-forest-100: #dcfce7;
+    --color-forest-200: #bbf7d0;
+    --color-forest-300: #86efac;
+    --color-forest-400: #4ade80;
+    --color-forest-500: #22c55e;
+    --color-forest-600: #16a34a;
+    --color-forest-700: #15803d;
+    --color-forest-800: #166534;
+    --color-forest-900: #14532d;
+    --color-forest-950: #052e16;
 
-	--color-coral-50: #fff7ed;
-	--color-coral-100: #ffedd5;
-	--color-coral-200: #fed7aa;
-	--color-coral-300: #fdba74;
-	--color-coral-400: #fb923c;
-	--color-coral-500: #f97316;
-	--color-coral-600: #ea580c;
-	--color-coral-700: #c2410c;
-	--color-coral-800: #9a3412;
-	--color-coral-900: #7c2d12;
-	--color-coral-950: #431407;
+    --color-coral-50: #fff7ed;
+    --color-coral-100: #ffedd5;
+    --color-coral-200: #fed7aa;
+    --color-coral-300: #fdba74;
+    --color-coral-400: #fb923c;
+    --color-coral-500: #f97316;
+    --color-coral-600: #ea580c;
+    --color-coral-700: #c2410c;
+    --color-coral-800: #9a3412;
+    --color-coral-900: #7c2d12;
+    --color-coral-950: #431407;
 
-	--color-slate-850: #1a2332;
-	--color-slate-925: #0d1117;
+    --color-slate-850: #1a2332;
+    --color-slate-925: #0d1117;
 
-	/* Dynamic accent colors (set by theme) */
-	--color-accent-50: var(--color-forest-50);
-	--color-accent-100: var(--color-forest-100);
-	--color-accent-200: var(--color-forest-200);
-	--color-accent-300: var(--color-forest-300);
-	--color-accent-400: var(--color-forest-400);
-	--color-accent-500: var(--color-forest-500);
-	--color-accent-600: var(--color-forest-600);
-	--color-accent-700: var(--color-forest-700);
-	--color-accent-800: var(--color-forest-800);
-	--color-accent-900: var(--color-forest-900);
-	--color-accent-950: var(--color-forest-950);
+    /* Dynamic accent colors (set by theme) */
+    --color-accent-50: var(--color-forest-50);
+    --color-accent-100: var(--color-forest-100);
+    --color-accent-200: var(--color-forest-200);
+    --color-accent-300: var(--color-forest-300);
+    --color-accent-400: var(--color-forest-400);
+    --color-accent-500: var(--color-forest-500);
+    --color-accent-600: var(--color-forest-600);
+    --color-accent-700: var(--color-forest-700);
+    --color-accent-800: var(--color-forest-800);
+    --color-accent-900: var(--color-forest-900);
+    --color-accent-950: var(--color-forest-950);
 }
 
 /* Theme definitions */
 :root {
-	/* Default: Forest (green) */
-	--accent-50: #f0fdf4;
-	--accent-100: #dcfce7;
-	--accent-200: #bbf7d0;
-	--accent-300: #86efac;
-	--accent-400: #4ade80;
-	--accent-500: #22c55e;
-	--accent-600: #16a34a;
-	--accent-700: #15803d;
-	--accent-800: #166534;
-	--accent-900: #14532d;
+    /* Default: Forest (green) */
+    --accent-50: #f0fdf4;
+    --accent-100: #dcfce7;
+    --accent-200: #bbf7d0;
+    --accent-300: #86efac;
+    --accent-400: #4ade80;
+    --accent-500: #22c55e;
+    --accent-600: #16a34a;
+    --accent-700: #15803d;
+    --accent-800: #166534;
+    --accent-900: #14532d;
 }
 
 [data-theme="ocean"] {
-	--accent-50: #eff6ff;
-	--accent-100: #dbeafe;
-	--accent-200: #bfdbfe;
-	--accent-300: #93c5fd;
-	--accent-400: #60a5fa;
-	--accent-500: #3b82f6;
-	--accent-600: #2563eb;
-	--accent-700: #1d4ed8;
-	--accent-800: #1e40af;
-	--accent-900: #1e3a8a;
+    --accent-50: #eff6ff;
+    --accent-100: #dbeafe;
+    --accent-200: #bfdbfe;
+    --accent-300: #93c5fd;
+    --accent-400: #60a5fa;
+    --accent-500: #3b82f6;
+    --accent-600: #2563eb;
+    --accent-700: #1d4ed8;
+    --accent-800: #1e40af;
+    --accent-900: #1e3a8a;
 }
 
 [data-theme="sunset"] {
-	--accent-50: #fff7ed;
-	--accent-100: #ffedd5;
-	--accent-200: #fed7aa;
-	--accent-300: #fdba74;
-	--accent-400: #fb923c;
-	--accent-500: #f97316;
-	--accent-600: #ea580c;
-	--accent-700: #c2410c;
-	--accent-800: #9a3412;
-	--accent-900: #7c2d12;
+    --accent-50: #fff7ed;
+    --accent-100: #ffedd5;
+    --accent-200: #fed7aa;
+    --accent-300: #fdba74;
+    --accent-400: #fb923c;
+    --accent-500: #f97316;
+    --accent-600: #ea580c;
+    --accent-700: #c2410c;
+    --accent-800: #9a3412;
+    --accent-900: #7c2d12;
 }
 
 [data-theme="violet"] {
-	--accent-50: #faf5ff;
-	--accent-100: #f3e8ff;
-	--accent-200: #e9d5ff;
-	--accent-300: #d8b4fe;
-	--accent-400: #c084fc;
-	--accent-500: #a855f7;
-	--accent-600: #9333ea;
-	--accent-700: #7e22ce;
-	--accent-800: #6b21a8;
-	--accent-900: #581c87;
+    --accent-50: #faf5ff;
+    --accent-100: #f3e8ff;
+    --accent-200: #e9d5ff;
+    --accent-300: #d8b4fe;
+    --accent-400: #c084fc;
+    --accent-500: #a855f7;
+    --accent-600: #9333ea;
+    --accent-700: #7e22ce;
+    --accent-800: #6b21a8;
+    --accent-900: #581c87;
 }
 
 [data-theme="rose"] {
-	--accent-50: #fff1f2;
-	--accent-100: #ffe4e6;
-	--accent-200: #fecdd3;
-	--accent-300: #fda4af;
-	--accent-400: #fb7185;
-	--accent-500: #f43f5e;
-	--accent-600: #e11d48;
-	--accent-700: #be123c;
-	--accent-800: #9f1239;
-	--accent-900: #881337;
+    --accent-50: #fff1f2;
+    --accent-100: #ffe4e6;
+    --accent-200: #fecdd3;
+    --accent-300: #fda4af;
+    --accent-400: #fb7185;
+    --accent-500: #f43f5e;
+    --accent-600: #e11d48;
+    --accent-700: #be123c;
+    --accent-800: #9f1239;
+    --accent-900: #881337;
 }
 
 [data-theme="amber"] {
-	--accent-50: #fffbeb;
-	--accent-100: #fef3c7;
-	--accent-200: #fde68a;
-	--accent-300: #fcd34d;
-	--accent-400: #fbbf24;
-	--accent-500: #f59e0b;
-	--accent-600: #d97706;
-	--accent-700: #b45309;
-	--accent-800: #92400e;
-	--accent-900: #78350f;
+    --accent-50: #fffbeb;
+    --accent-100: #fef3c7;
+    --accent-200: #fde68a;
+    --accent-300: #fcd34d;
+    --accent-400: #fbbf24;
+    --accent-500: #f59e0b;
+    --accent-600: #d97706;
+    --accent-700: #b45309;
+    --accent-800: #92400e;
+    --accent-900: #78350f;
 }
 
 @layer base {
-	html {
-		font-family: var(--font-body);
-	}
-	
-	body {
-		@apply bg-slate-925 text-slate-100 antialiased;
-		transition: background-color 0.2s ease, color 0.2s ease;
-	}
-	
-	h1, h2, h3, h4, h5, h6 {
-		font-family: var(--font-display);
-	}
+    html {
+        font-family: var(--font-body);
+    }
+
+    body {
+        @apply bg-slate-925 text-slate-100 antialiased;
+        transition:
+            background-color 0.2s ease,
+            color 0.2s ease;
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        font-family: var(--font-display);
+    }
 }
 
 /* Light mode */
 [data-mode="light"] body {
-	@apply bg-slate-100 text-slate-900;
+    @apply bg-slate-100 text-slate-900;
 }
 
 [data-mode="light"] .bg-slate-925 {
-	background-color: #f8fafc;
+    background-color: #f8fafc;
 }
 
 [data-mode="light"] .bg-slate-925\/80 {
-	background-color: rgba(248, 250, 252, 0.8);
+    background-color: rgba(248, 250, 252, 0.8);
 }
 
 [data-mode="light"] .bg-slate-900 {
-	background-color: #f1f5f9;
+    background-color: #f1f5f9;
 }
 
 [data-mode="light"] .bg-slate-850 {
-	background-color: #ffffff;
+    background-color: #ffffff;
 }
 
 [data-mode="light"] .bg-slate-850\/80 {
-	background-color: rgba(255, 255, 255, 0.8);
+    background-color: rgba(255, 255, 255, 0.8);
 }
 
 [data-mode="light"] .bg-slate-800 {
-	background-color: #e2e8f0;
+    background-color: #e2e8f0;
 }
 
 [data-mode="light"] .bg-slate-800\/50 {
-	background-color: rgba(226, 232, 240, 0.5);
+    background-color: rgba(226, 232, 240, 0.5);
 }
 
 [data-mode="light"] .text-white {
-	color: #0f172a;
+    color: #0f172a;
 }
 
 [data-mode="light"] .text-slate-100 {
-	color: #1e293b;
+    color: #1e293b;
 }
 
 [data-mode="light"] .text-slate-200 {
-	color: #334155;
+    color: #334155;
 }
 
 [data-mode="light"] .text-slate-300 {
-	color: #475569;
+    color: #475569;
 }
 
 [data-mode="light"] .text-slate-400 {
-	color: #64748b;
+    color: #64748b;
 }
 
 [data-mode="light"] .text-slate-500 {
-	color: #94a3b8;
+    color: #94a3b8;
 }
 
 [data-mode="light"] .border-slate-700\/50 {
-	border-color: rgba(203, 213, 225, 0.5);
+    border-color: rgba(203, 213, 225, 0.5);
 }
 
 [data-mode="light"] .border-slate-800\/50 {
-	border-color: rgba(203, 213, 225, 0.5);
+    border-color: rgba(203, 213, 225, 0.5);
 }
 
 [data-mode="light"] .from-slate-925 {
-	--tw-gradient-from: #f8fafc;
+    --tw-gradient-from: #f8fafc;
 }
 
 [data-mode="light"] .via-slate-900 {
-	--tw-gradient-via: #f1f5f9;
+    --tw-gradient-via: #f1f5f9;
 }
 
 [data-mode="light"] .to-slate-925 {
-	--tw-gradient-to: #f8fafc;
+    --tw-gradient-to: #f8fafc;
 }
 
 [data-mode="light"] .to-slate-900 {
-	--tw-gradient-to: #f1f5f9;
+    --tw-gradient-to: #f1f5f9;
 }
 
 [data-mode="light"] .from-slate-850 {
-	--tw-gradient-from: #ffffff;
+    --tw-gradient-from: #ffffff;
 }
 
 [data-mode="light"] .hover\:bg-slate-800:hover {
-	background-color: #e2e8f0;
+    background-color: #e2e8f0;
 }
 
 [data-mode="light"] .hover\:bg-slate-700:hover {
-	background-color: #cbd5e1;
+    background-color: #cbd5e1;
 }
 
 /* Utility classes that use the theme accent colors */
 @layer utilities {
-	.bg-accent-500 { background-color: var(--accent-500); }
-	.bg-accent-600 { background-color: var(--accent-600); }
-	.bg-accent-500\/10 { background-color: color-mix(in srgb, var(--accent-500) 10%, transparent); }
-	.bg-accent-500\/20 { background-color: color-mix(in srgb, var(--accent-500) 20%, transparent); }
-	.bg-accent-500\/30 { background-color: color-mix(in srgb, var(--accent-500) 30%, transparent); }
-	.bg-accent-600\/30 { background-color: color-mix(in srgb, var(--accent-600) 30%, transparent); }
-	.bg-accent-900\/10 { background-color: color-mix(in srgb, var(--accent-900) 10%, transparent); }
-	.bg-accent-900\/20 { background-color: color-mix(in srgb, var(--accent-900) 20%, transparent); }
-	.text-accent-300 { color: var(--accent-300); }
-	.text-accent-400 { color: var(--accent-400); }
-	.text-accent-500 { color: var(--accent-500); }
-	.text-accent-100 { color: var(--accent-100); }
-	.border-accent-500\/30 { border-color: color-mix(in srgb, var(--accent-500) 30%, transparent); }
-	.border-accent-500\/50 { border-color: color-mix(in srgb, var(--accent-500) 50%, transparent); }
-	.ring-accent-500\/50 { --tw-ring-color: color-mix(in srgb, var(--accent-500) 50%, transparent); }
-	.shadow-accent-900\/20 { --tw-shadow-color: color-mix(in srgb, var(--accent-900) 20%, transparent); }
-	.shadow-accent-900\/30 { --tw-shadow-color: color-mix(in srgb, var(--accent-900) 30%, transparent); }
-	.from-accent-500 { --tw-gradient-from: var(--accent-500); }
-	.from-accent-600 { --tw-gradient-from: var(--accent-600); }
-	.from-accent-900\/10 { --tw-gradient-from: color-mix(in srgb, var(--accent-900) 10%, transparent); }
-	.from-accent-900\/20 { --tw-gradient-from: color-mix(in srgb, var(--accent-900) 20%, transparent); }
-	.to-accent-600 { --tw-gradient-to: var(--accent-600); }
-	.focus\:border-accent-500:focus { border-color: var(--accent-500); }
-	.focus\:ring-accent-500\/20:focus { --tw-ring-color: color-mix(in srgb, var(--accent-500) 20%, transparent); }
+    .bg-accent-500 {
+        background-color: var(--accent-500);
+    }
+    .bg-accent-600 {
+        background-color: var(--accent-600);
+    }
+    .bg-accent-500\/10 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-500) 10%,
+            transparent
+        );
+    }
+    .bg-accent-500\/20 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-500) 20%,
+            transparent
+        );
+    }
+    .bg-accent-500\/30 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-500) 30%,
+            transparent
+        );
+    }
+    .bg-accent-600\/30 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-600) 30%,
+            transparent
+        );
+    }
+    .bg-accent-900\/10 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-900) 10%,
+            transparent
+        );
+    }
+    .bg-accent-900\/20 {
+        background-color: color-mix(
+            in srgb,
+            var(--accent-900) 20%,
+            transparent
+        );
+    }
+    .text-accent-300 {
+        color: var(--accent-300);
+    }
+    .text-accent-400 {
+        color: var(--accent-400);
+    }
+    .text-accent-500 {
+        color: var(--accent-500);
+    }
+    .text-accent-100 {
+        color: var(--accent-100);
+    }
+    .border-accent-500\/30 {
+        border-color: color-mix(in srgb, var(--accent-500) 30%, transparent);
+    }
+    .border-accent-500\/50 {
+        border-color: color-mix(in srgb, var(--accent-500) 50%, transparent);
+    }
+    .ring-accent-500\/50 {
+        --tw-ring-color: color-mix(in srgb, var(--accent-500) 50%, transparent);
+    }
+    .shadow-accent-900\/20 {
+        --tw-shadow-color: color-mix(
+            in srgb,
+            var(--accent-900) 20%,
+            transparent
+        );
+    }
+    .shadow-accent-900\/30 {
+        --tw-shadow-color: color-mix(
+            in srgb,
+            var(--accent-900) 30%,
+            transparent
+        );
+    }
+    .from-accent-500 {
+        --tw-gradient-from: var(--accent-500);
+    }
+    .from-accent-600 {
+        --tw-gradient-from: var(--accent-600);
+    }
+    .from-accent-900\/10 {
+        --tw-gradient-from: color-mix(
+            in srgb,
+            var(--accent-900) 10%,
+            transparent
+        );
+    }
+    .from-accent-900\/20 {
+        --tw-gradient-from: color-mix(
+            in srgb,
+            var(--accent-900) 20%,
+            transparent
+        );
+    }
+    .to-accent-600 {
+        --tw-gradient-to: var(--accent-600);
+    }
+    .focus\:border-accent-500:focus {
+        border-color: var(--accent-500);
+    }
+    .focus\:ring-accent-500\/20:focus {
+        --tw-ring-color: color-mix(in srgb, var(--accent-500) 20%, transparent);
+    }
 }
 
 /* Base typography */
 @layer base {
-	html {
-		font-family: 'Nunito', system-ui, sans-serif;
-		-webkit-font-smoothing: antialiased;
-		-moz-osx-font-smoothing: grayscale;
-		/* Bump base size for better readability */
-		font-size: 17px;
-	}
+    html {
+        font-family: "Nunito", system-ui, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        /* Mobile-first: 16px base, larger on desktop */
+        font-size: 16px;
+    }
 
-	h1, h2, h3, h4, h5, h6, .font-display {
-		font-family: 'Outfit', system-ui, sans-serif;
-		font-weight: 600;
-		letter-spacing: -0.02em;
-	}
+    @media (min-width: 768px) {
+        html {
+            font-size: 17px;
+        }
+    }
 
-	body {
-		line-height: 1.65;
-	}
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6,
+    .font-display {
+        font-family: "Outfit", system-ui, sans-serif;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+    }
 
-	/* Slightly larger text classes */
-	.text-sm {
-		font-size: 0.9rem;
-	}
+    body {
+        line-height: 1.65;
+    }
 
-	.text-xs {
-		font-size: 0.8rem;
-	}
+    /* Slightly larger text classes */
+    .text-sm {
+        font-size: 0.9rem;
+    }
+
+    .text-xs {
+        font-size: 0.8rem;
+    }
 }
