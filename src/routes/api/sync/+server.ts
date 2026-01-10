@@ -7,7 +7,8 @@ import {
 	insertRun,
 	updateRunFeedback,
 	getRunByActivityId,
-	hasCompletedSetup
+	hasCompletedSetup,
+	matchRunToPlan
 } from '$lib/server/db';
 import type { LocalDatabase } from '$lib/server/sqlite';
 import { notifyRunSynced } from '$lib/server/notifications';
@@ -29,6 +30,16 @@ async function syncRun(
 		...run,
 		ai_feedback: null
 	});
+
+	// Smart matching: Mark nearest pending plan as completed
+	try {
+		const matched = await matchRunToPlan(db, run.date);
+		if (!matched) {
+			console.log(`ℹ No training plan found within 4 days of ${run.date}`);
+		}
+	} catch (err) {
+		console.error('Failed to match run to plan:', err);
+	}
 
 	// Get AI feedback
 	let feedback: string | null = null;

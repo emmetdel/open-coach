@@ -21,6 +21,14 @@ export const load: PageServerLoad = async ({ locals }) => {
   // Fetch all runs for analytics
   const runs = await getRecentRuns(db, 1000);
 
+  // Fetch training plan data for consistency tracking
+  const allPlans = await db
+    .prepare('SELECT * FROM training_plan ORDER BY scheduled_date ASC')
+    .all<{ scheduled_date: string; status: string; type: string }>();
+
+  // Calculate consistency metrics (even if no runs yet)
+  const consistencyData = calculateConsistencyMetrics(runs, allPlans.results);
+
   if (runs.length === 0) {
     return {
       hasRuns: false,
@@ -37,6 +45,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         longestRun: "0 km",
         fastestPace: "--",
       },
+      consistency: consistencyData,
     };
   }
 
@@ -193,5 +202,133 @@ export const load: PageServerLoad = async ({ locals }) => {
       longestRun: formatDistance(longestRun),
       fastestPace: formatDuration(Math.round(fastestPace * 60)) + "/km",
     },
+    consistency: consistencyData,
   };
 };
+
+// Calculate consistency metrics
+function calculateConsistencyMetrics(
+  runs: any[],
+  plans: { scheduled_date: string; status: string; type: string }[]
+) {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+
+  // Calculate weekly completion rates (last 7 weeks + current week)
+  const weeklyData: {
+    week: string;
+    planned: number;
+    completed: number;
+    rate: number;
+  }[] = [];
+
+  // Include current/future week (i = -1) to show in-progress data
+  for (let i = 7; i >= -1; i--) {
+    const weekStart = new Date(today);
+    weekStart.setDate(today.getDate() - (i * 7 + today.getDay()));
+    const weekEnd = new Date(weekStart);
+    weekEnd.setDate(weekStart.getDate() + 6);
+
+    const weekPlans = plans.filter((p) => {
+      const planDate = new Date(p.scheduled_date);
+      const isInWeek = planDate >= weekStart && planDate <= weekEnd;
+      const isNotRest = p.type !== "Rest";
+
+      // Count completed plans even if in future (ran early)
+      // Only exclude pending future plans
+      const shouldCount = p.status === "Completed" || planDate <= today;
+
+      return isInWeek && isNotRest && shouldCount;
+    });
+
+    const completed = weekPlans.filter(
+      (p) => p.status === "Completed"
+    ).length;
+    const planned = weekPlans.length;
+
+    weeklyData.push({
+      week: weekStart.toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+      }),
+      planned,
+      completed,
+      rate: planned > 0 ? Math.round((completed / planned) * 100) : 0,
+    });
+  }
+
+  // Calculate current streak (consecutive weeks with ≥75% completion)
+  let currentStreak = 0;
+  for (let i = weeklyData.length - 1; i >= 0; i--) {
+    if (weeklyData[i].rate >= 75) {
+      currentStreak++;
+    } else {
+      break;
+    }
+  }
+
+  // Calculate best streak
+  let bestStreak = 0;
+  let tempStreak = 0;
+  for (const week of weeklyData) {
+    if (week.rate >= 75) {
+      tempStreak++;
+      bestStreak = Math.max(bestStreak, tempStreak);
+    } else {
+      tempStreak = 0;
+    }
+  }
+
+  // Calculate habit health score (0-100)
+  const last4Weeks = weeklyData.slice(-4);
+  const avgCompletion =
+    last4Weeks.reduce((sum, w) => sum + w.rate, 0) / last4Weeks.length;
+  const habitHealth = Math.round(avgCompletion);
+
+  // Generate calendar heatmap data (last 90 days)
+  const calendarData: { date: string; count: number; hasRun: boolean }[] = [];
+  for (let i = 89; i >= 0; i--) {
+    const date = new Date(today);
+    date.setDate(today.getDate() - i);
+    const dateStr = date.toISOString().split("T")[0];
+
+    const runsOnDay = runs.filter((r) => {
+      const runDate = new Date(r.date).toISOString().split("T")[0];
+      return runDate === dateStr;
+    });
+
+    calendarData.push({
+      date: dateStr,
+      count: runsOnDay.length,
+      hasRun: runsOnDay.length > 0,
+    });
+  }
+
+  // Get health status and message
+  let healthStatus: "excellent" | "good" | "slipping" | "needsWork";
+  let healthMessage: string;
+
+  if (habitHealth >= 90) {
+    healthStatus = "excellent";
+    healthMessage = "Outstanding consistency! You're crushing it! 🔥";
+  } else if (habitHealth >= 75) {
+    healthStatus = "good";
+    healthMessage = "Great consistency! Keep showing up! 💪";
+  } else if (habitHealth >= 50) {
+    healthStatus = "slipping";
+    healthMessage = "You're slipping a bit. Let's get back on track! 🎯";
+  } else {
+    healthStatus = "needsWork";
+    healthMessage = "Time to rebuild the habit. One run at a time! 🌱";
+  }
+
+  return {
+    weeklyCompletion: weeklyData,
+    currentStreak,
+    bestStreak,
+    habitHealth,
+    healthStatus,
+    healthMessage,
+    calendarData,
+  };
+}

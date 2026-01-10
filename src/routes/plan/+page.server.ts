@@ -1,30 +1,18 @@
 import type { PageServerLoad } from "./$types";
 import {
-  getPlansGroupedByWeek,
   getPlanMetadata,
   getCurrentWeekNumber,
   hasCompletedSetup,
 } from "$lib/server/db";
 import { redirect } from "@sveltejs/kit";
 
-export interface WeekDisplay {
-  weekNumber: number;
-  startDate: string;
-  endDate: string;
-  workouts: WorkoutDisplay[];
-  totalWorkouts: number;
-  isCurrentWeek: boolean;
-}
-
-export interface WorkoutDisplay {
+export interface CalendarRun {
   id: string;
-  day: string;
+  date: string; // YYYY-MM-DD
   type: string;
   distance: string | null;
   duration: string | null;
-  description: string;
-  status: string;
-  scheduledDate: string;
+  status: 'Pending' | 'Completed' | 'Missed';
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -38,67 +26,42 @@ export const load: PageServerLoad = async ({ locals }) => {
     throw redirect(307, "/setup");
   }
 
-  const [plansGrouped, metadata, currentWeek] = await Promise.all([
-    getPlansGroupedByWeek(db),
+  const [metadata, currentWeek] = await Promise.all([
     getPlanMetadata(db),
     getCurrentWeekNumber(db),
   ]);
 
   const planName = metadata["plan_name"] || "Your Training Plan";
   const totalWeeks = parseInt(metadata["total_weeks"] || "0", 10);
-  const startDate =
-    metadata["start_date"] || new Date().toISOString().split("T")[0];
 
-  // Convert to array of weeks for display
-  const weeks: WeekDisplay[] = [];
+  // Get all training plans for calendar
+  const allPlans = await db
+    .prepare('SELECT * FROM training_plan ORDER BY scheduled_date ASC')
+    .all<{
+      id: string;
+      scheduled_date: string;
+      type: string;
+      target_distance_km: number | null;
+      target_duration_minutes: number | null;
+      status: string;
+    }>();
 
-  for (let w = 1; w <= totalWeeks; w++) {
-    const weekPlans = plansGrouped.get(w) || [];
-    const weekStart = new Date(startDate);
-    weekStart.setDate(weekStart.getDate() + (w - 1) * 7);
-    const weekEnd = new Date(weekStart);
-    weekEnd.setDate(weekEnd.getDate() + 6);
-
-    const workouts: WorkoutDisplay[] = weekPlans.map((plan) => {
-      const date = new Date(plan.scheduled_date + "T12:00:00");
-      return {
-        id: plan.id,
-        day: date.toLocaleDateString("en-US", { weekday: "short" }),
-        type: plan.type,
-        distance: plan.target_distance_km
-          ? `${plan.target_distance_km}km`
-          : null,
-        duration: plan.target_duration_minutes
-          ? `${plan.target_duration_minutes} min`
-          : null,
-        description: plan.description,
-        status: plan.status,
-        scheduledDate: plan.scheduled_date,
-      };
-    });
-
-    weeks.push({
-      weekNumber: w,
-      startDate: weekStart.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      endDate: weekEnd.toLocaleDateString("en-US", {
-        month: "short",
-        day: "numeric",
-      }),
-      workouts,
-      totalWorkouts: workouts.length,
-      isCurrentWeek: w === currentWeek,
-    });
-  }
+  // Convert to calendar format
+  const runs: CalendarRun[] = allPlans.results.map((plan) => ({
+    id: plan.id,
+    date: plan.scheduled_date,
+    type: plan.type,
+    distance: plan.target_distance_km ? `${plan.target_distance_km}km` : null,
+    duration: plan.target_duration_minutes ? `${plan.target_duration_minutes} min` : null,
+    status: plan.status as 'Pending' | 'Completed' | 'Missed',
+  }));
 
   return {
     planName,
     totalWeeks,
     currentWeek,
     completedWeeks: Math.max(0, currentWeek - 1),
-    weeks,
+    runs,
     hasPlan: totalWeeks > 0,
   };
 };

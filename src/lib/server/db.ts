@@ -406,6 +406,52 @@ export async function deleteFuturePlans(db: Database): Promise<void> {
 		.run();
 }
 
+// Smart run matching: Find nearest pending plan for a completed run and mark it complete
+export async function matchRunToPlan(db: Database, runDate: string): Promise<boolean> {
+	// Parse run date (format: "2026-01-08 12:34:45" or "2026-01-08")
+	const runDateOnly = runDate.split(' ')[0]; // Get just YYYY-MM-DD
+	const runTimestamp = new Date(runDateOnly).getTime();
+
+	// Find all pending non-Rest plans within +/- 4 days of the run
+	const nearbyPlans = await db
+		.prepare(
+			`SELECT id, scheduled_date, type
+			 FROM training_plan
+			 WHERE status = 'Pending'
+			   AND type != 'Rest'
+			   AND scheduled_date BETWEEN date(?, '-4 days') AND date(?, '+4 days')
+			 ORDER BY scheduled_date`
+		)
+		.bind(runDateOnly, runDateOnly)
+		.all<{ id: string; scheduled_date: string; type: string }>();
+
+	if (nearbyPlans.results.length === 0) {
+		return false; // No nearby plans to match
+	}
+
+	// Find the closest plan by date difference
+	let closestPlan: { id: string; scheduled_date: string; type: string } | null = null;
+	let smallestDiff = Infinity;
+
+	for (const plan of nearbyPlans.results) {
+		const planTimestamp = new Date(plan.scheduled_date).getTime();
+		const diff = Math.abs(runTimestamp - planTimestamp);
+		if (diff < smallestDiff) {
+			smallestDiff = diff;
+			closestPlan = plan;
+		}
+	}
+
+	if (closestPlan) {
+		// Mark the closest plan as completed
+		await updatePlanStatus(db, closestPlan.id, 'Completed');
+		console.log(`✓ Matched run from ${runDateOnly} to plan on ${closestPlan.scheduled_date}`);
+		return true;
+	}
+
+	return false;
+}
+
 // Get the next scheduled run
 export async function getNextRun(db: Database): Promise<TrainingPlan | null> {
 	return await db
