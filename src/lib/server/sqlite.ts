@@ -150,7 +150,8 @@ class SQLiteWrapper {
       },
       first: async <T>(colName?: string): Promise<T | null> => {
         try {
-          const row = stmt.get(...boundValues) as
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const row = stmt.get(...(boundValues as any[])) as
             | Record<string, unknown>
             | undefined;
           if (!row) return null;
@@ -165,7 +166,8 @@ class SQLiteWrapper {
       },
       all: async <T>(): Promise<QueryResult<T>> => {
         try {
-          const rows = stmt.all(...boundValues) as T[];
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const rows = stmt.all(...(boundValues as any[])) as T[];
           return {
             results: rows,
             success: true,
@@ -178,7 +180,8 @@ class SQLiteWrapper {
       },
       run: async (): Promise<QueryResult<unknown>> => {
         try {
-          const info = stmt.run(...boundValues);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const info = stmt.run(...(boundValues as any[]));
           return {
             results: [],
             success: true,

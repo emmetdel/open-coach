@@ -143,14 +143,16 @@ export async function fetchRecentRuns(
         try {
           // Fetch activity details which includes the polyline
           const details = await client.getActivity({
-            activityId: activity.activityId,
+            activityId: Number(activity.activityId),
           });
 
           // Merge details with the activity summary
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const detailsAny = details as any;
           return {
             ...activity,
             mapPolyline:
-              details?.summaryPolyline?.polyline ||
+              detailsAny?.summaryPolyline?.polyline ||
               activity.mapPolyline ||
               null,
           };

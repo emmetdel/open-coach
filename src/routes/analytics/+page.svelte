@@ -12,13 +12,174 @@
         Calendar,
         Heart,
         Trophy,
-        Target,
-        Zap,
         Settings,
+        Zap,
     } from "lucide-svelte";
     import type { PageData } from "./$types";
+    import Chart from "$lib/components/ui/chart/Chart.svelte";
+    import type { ChartConfiguration } from "chart.js";
 
     let { data }: { data: PageData } = $props();
+
+    function formatPace(seconds: number): string {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.round(seconds % 60);
+        return `${mins}:${secs.toString().padStart(2, "0")}`;
+    }
+
+    // Chart Options Helpers
+    const commonOptions = {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: {
+                display: false,
+            },
+            tooltip: {
+                backgroundColor: "#1e293b",
+                titleColor: "#f8fafc",
+                bodyColor: "#cbd5e1",
+                borderColor: "#334155",
+                borderWidth: 1,
+                padding: 10,
+                displayColors: false,
+            },
+        },
+        scales: {
+            x: {
+                grid: {
+                    color: "#334155",
+                    drawBorder: false,
+                },
+                ticks: {
+                    color: "#94a3b8",
+                },
+            },
+            y: {
+                grid: {
+                    color: "#334155",
+                    drawBorder: false,
+                },
+                ticks: {
+                    color: "#94a3b8",
+                },
+            },
+        },
+    };
+
+    // Pace Chart Config
+    const paceChartConfig: ChartConfiguration = $derived({
+        type: "line",
+        data: {
+            labels: data.paceData.map((p) => p.date),
+            datasets: [
+                {
+                    label: "Pace (min/km)",
+                    data: data.paceData.map((p) => p.paceSeconds),
+                    borderColor: "#10b981", // forest-500
+                    backgroundColor: "rgba(16, 185, 129, 0.1)",
+                    borderWidth: 2,
+                    tension: 0.3,
+                    fill: true,
+                    pointBackgroundColor: "#059669", // forest-600
+                    pointRadius: 4,
+                    pointHoverRadius: 6,
+                },
+            ],
+        },
+        options: {
+            ...commonOptions,
+            scales: {
+                ...commonOptions.scales,
+                y: {
+                    ...commonOptions.scales.y,
+                    reverse: true, // Lower pace is better/faster
+                    ticks: {
+                        color: "#94a3b8",
+                        callback: (value) => formatPace(Number(value)),
+                    },
+                },
+            },
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        label: (context) =>
+                            `Pace: ${formatPace(Number(context.raw))}/km`,
+                    },
+                },
+            },
+        },
+    });
+
+    // Volume Chart Config
+    const volumeChartConfig: ChartConfiguration = $derived({
+        type: "bar",
+        data: {
+            labels: data.volumeData.map((w) => w.week),
+            datasets: [
+                {
+                    label: "Distance (km)",
+                    data: data.volumeData.map((w) => w.distanceKm),
+                    backgroundColor: "#f43f5e", // coral-500 (approx rose-500)
+                    borderRadius: 4,
+                    hoverBackgroundColor: "#fb7185", // rose-400
+                },
+            ],
+        },
+        options: {
+            ...commonOptions,
+            plugins: {
+                ...commonOptions.plugins,
+                tooltip: {
+                    ...commonOptions.plugins.tooltip,
+                    callbacks: {
+                        label: (context) => `Distance: ${context.raw} km`,
+                    },
+                },
+            },
+        },
+    });
+
+    // HR Zone Config
+    const hrZoneChartConfig: ChartConfiguration = $derived({
+        type: "doughnut",
+        data: {
+            labels: data.hrZoneData.map((z) => z.zone),
+            datasets: [
+                {
+                    data: data.hrZoneData.map((z) => z.count),
+                    backgroundColor: [
+                        "#94a3b8", // Z1 - slate-400
+                        "#60a5fa", // Z2 - blue-400
+                        "#34d399", // Z3 - emerald-400
+                        "#fbbf24", // Z4 - amber-400
+                        "#f87171", // Z5 - red-400
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 4,
+                },
+            ],
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: "right",
+                    labels: {
+                        color: "#cbd5e1",
+                        font: {
+                            size: 12,
+                        },
+                        boxWidth: 12,
+                    },
+                },
+                tooltip: commonOptions.plugins.tooltip,
+            },
+        },
+    });
 </script>
 
 <svelte:head>
@@ -261,58 +422,11 @@
                         </CardHeader>
                         <CardContent>
                             {#if data.paceData.length > 0}
-                                {@const minPace = Math.min(
-                                    ...data.paceData.map((p) => p.paceSeconds),
-                                )}
-                                {@const maxPace = Math.max(
-                                    ...data.paceData.map((p) => p.paceSeconds),
-                                )}
-                                {@const paceRange = maxPace - minPace}
-                                <div class="space-y-2">
-                                    <p class="text-sm text-slate-400">
-                                        Last {data.paceData.length} run{data
-                                            .paceData.length > 1
-                                            ? "s"
-                                            : ""}
-                                    </p>
-                                    <div
-                                        class="h-64 flex items-end justify-between gap-1"
-                                    >
-                                        {#each data.paceData as point}
-                                            <div
-                                                class="flex flex-1 flex-col items-center justify-end group relative"
-                                            >
-                                                <div
-                                                    class="w-full rounded-t bg-gradient-to-t from-forest-600 to-forest-400 min-h-[20px]"
-                                                    style="height: {paceRange >
-                                                    0
-                                                        ? ((maxPace -
-                                                              point.paceSeconds) /
-                                                              paceRange) *
-                                                              80 +
-                                                          20
-                                                        : 50}%"
-                                                ></div>
-                                                <div
-                                                    class="absolute bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10"
-                                                >
-                                                    {point.pace} • {point.date}
-                                                </div>
-                                            </div>
-                                        {/each}
-                                    </div>
-                                    <div
-                                        class="flex justify-between text-xs text-slate-500"
-                                    >
-                                        <span>{data.paceData[0].date}</span>
-                                        {#if data.paceData.length > 1}
-                                            <span
-                                                >{data.paceData[
-                                                    data.paceData.length - 1
-                                                ].date}</span
-                                            >
-                                        {/if}
-                                    </div>
+                                <div class="h-64 w-full">
+                                    <Chart
+                                        config={paceChartConfig}
+                                        class="h-full w-full"
+                                    />
                                 </div>
                             {:else}
                                 <p class="py-8 text-center text-slate-400">
@@ -334,45 +448,11 @@
                         </CardHeader>
                         <CardContent>
                             {#if data.volumeData.length > 0}
-                                {@const maxVolume = Math.max(
-                                    ...data.volumeData.map((w) => w.distanceKm),
-                                )}
-                                <div class="space-y-2">
-                                    <p class="text-sm text-slate-400">
-                                        Last {data.volumeData.length} week{data
-                                            .volumeData.length > 1
-                                            ? "s"
-                                            : ""}
-                                    </p>
-                                    <div
-                                        class="h-64 flex items-end justify-between gap-2"
-                                    >
-                                        {#each data.volumeData as week}
-                                            <div
-                                                class="flex flex-1 flex-col items-center justify-end group relative"
-                                            >
-                                                <div
-                                                    class="w-full rounded-t bg-gradient-to-t from-coral-600 to-coral-400 min-h-[20px]"
-                                                    style="height: {maxVolume >
-                                                    0
-                                                        ? (week.distanceKm /
-                                                              maxVolume) *
-                                                              90 +
-                                                          10
-                                                        : 50}%"
-                                                ></div>
-                                                <div
-                                                    class="absolute bottom-full mb-2 hidden group-hover:block bg-slate-800 text-white text-xs rounded px-2 py-1 whitespace-nowrap z-10"
-                                                >
-                                                    {week.distance}km • {week.week}
-                                                </div>
-                                                <span
-                                                    class="mt-2 text-xs text-slate-500"
-                                                    >{week.distance}km</span
-                                                >
-                                            </div>
-                                        {/each}
-                                    </div>
+                                <div class="h-64 w-full">
+                                    <Chart
+                                        config={volumeChartConfig}
+                                        class="h-full w-full"
+                                    />
                                 </div>
                             {:else}
                                 <p class="py-8 text-center text-slate-400">
@@ -446,39 +526,11 @@
                         </CardHeader>
                         <CardContent>
                             {#if data.hrZoneData.some((z) => z.count > 0)}
-                                <div class="space-y-3">
-                                    {#each data.hrZoneData as zone}
-                                        {#if zone.count > 0}
-                                            <div>
-                                                <div
-                                                    class="mb-1 flex items-center justify-between text-sm"
-                                                >
-                                                    <span class="text-slate-300"
-                                                        >{zone.zone}</span
-                                                    >
-                                                    <span
-                                                        class="font-medium text-white"
-                                                        >{zone.count} runs</span
-                                                    >
-                                                </div>
-                                                <div
-                                                    class="h-2 w-full rounded-full bg-slate-800"
-                                                >
-                                                    <div
-                                                        class="h-full rounded-full bg-rose-500"
-                                                        style="width: {(zone.count /
-                                                            Math.max(
-                                                                ...data.hrZoneData.map(
-                                                                    (z) =>
-                                                                        z.count,
-                                                                ),
-                                                            )) *
-                                                            100}%"
-                                                    ></div>
-                                                </div>
-                                            </div>
-                                        {/if}
-                                    {/each}
+                                <div class="h-64 w-full">
+                                    <Chart
+                                        config={hrZoneChartConfig}
+                                        class="h-full w-full"
+                                    />
                                 </div>
                             {:else}
                                 <p class="py-8 text-center text-slate-400">

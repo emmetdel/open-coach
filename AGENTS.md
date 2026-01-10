@@ -2,9 +2,11 @@
 
 ## 1. Executive Summary
 
-**OpenCoach** is a self-hosted running application built for busy individuals. It automates the entire coaching loop: ingesting run data, analyzing it for mental health/physical stress, and dynamically scheduling future runs.
+**OpenCoach** is a self-hosted running application built for beginner runners and busy professionals. It automates the entire coaching loop: ingesting run data, analyzing it with empathetic AI feedback, and dynamically scheduling future runs.
 
-**Core Philosophy:** "Mental Health over Metrics." The app prioritizes consistency and flexibility (rescheduling missed runs) over rigid performance goals.
+**Core Philosophy:** "Consistency over intensity. Every run counts." The app prioritizes habit formation and flexibility (rescheduling missed runs) over rigid performance goals.
+
+**Unfair Advantage:** Most running apps (Strava, Garmin Coach, Runkeeper) optimize for PRs and metrics. OpenCoach optimizes for showing up and building sustainable habits.
 
 ## 2. Technical Stack
 
@@ -176,3 +178,33 @@ services:
       - GARMIN_EMAIL=${GARMIN_EMAIL}
       - GARMIN_PASSWORD=${GARMIN_PASSWORD}
 ```
+
+## 10. Product Strategy & Roadmap
+
+### Target Market
+- **Primary:** Beginner runners struggling with consistency
+- **Secondary:** Busy professionals who need flexible training plans
+- **Anti-target:** Competitive runners chasing PRs (Strava serves them well)
+
+### Strategic Phases
+
+**Phase 1 (Months 1-3): Nail the Core Loop**
+- Focus on AI coaching quality and actionability
+- Add consistency analytics (not performance analytics)
+- Polish onboarding for shareability
+
+**Phase 2 (Months 4-6): Growth Features**
+- Expand workout context (acknowledge other activities)
+- Social sharing and accountability (not competition)
+- Polish Garmin integration
+
+**Phase 3 (Months 7+): Scale Decision Point**
+- If 50+ active users → Product path (multi-user, premium tier)
+- If staying OSS → Community path (plugins, integrations, deployments)
+
+### Key Principles
+1. **Consistency over intensity** - Always prioritize showing up over performance
+2. **Empathy over criticism** - AI feedback should be encouraging, never judgmental
+3. **Flexibility over rigidity** - Reschedule missed runs, adapt to life
+4. **Habit formation over metrics** - Track streaks and patterns, not just speed/distance
+5. **Context awareness** - Consider rest days, stress, sleep in coaching decisions

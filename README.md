@@ -1,8 +1,17 @@
 # OpenCoach
 
-> Mental Health over Metrics. Every run counts.
+> Consistency over intensity. Every run counts.
 
 OpenCoach is a self-hosted running application that automates the coaching loop: ingesting run data from Garmin, analyzing it with AI for empathetic feedback, and helping you stay consistent.
+
+## Why OpenCoach?
+
+Most running apps (Strava, Garmin Coach, Runkeeper) optimize for PRs and performance. **OpenCoach optimizes for showing up.**
+
+Perfect for:
+- **Beginner runners** trying to build a consistent habit
+- **Busy professionals** who need flexible training plans that adapt to life
+- **Anyone** who's struggled with rigid training plans that make you feel guilty for missing a run
 
 ## Features
 
@@ -10,6 +19,7 @@ OpenCoach is a self-hosted running application that automates the coaching loop:
 - **AI Coach**: Get personalized, empathetic feedback on every run (powered by OpenRouter)
 - **Model Selection**: Pick from Claude, GPT-4, Gemini, Llama, and more via OpenRouter
 - **Consistency Tracking**: Focus on showing up, not speed or distance
+- **Flexible Plans**: Missed a run? The AI reschedules it for you automatically
 - **Push Notifications**: Get instant browser notifications when runs sync
 - **Beautiful Dashboard**: Dark mode UI with real-time stats and run history
 
