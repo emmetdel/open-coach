@@ -2,187 +2,212 @@
 // POST /api/garmin/auth - Login with credentials from env or body
 // GET /api/garmin/auth - Check auth status
 
-import { json, error } from '@sveltejs/kit';
-import type { RequestHandler } from './$types';
-// @ts-expect-error - garmin-connect is CommonJS and doesn't have types
-import pkg from 'garmin-connect';
+import { json, error } from "@sveltejs/kit";
+import type { RequestHandler } from "./$types";
+import pkg from "garmin-connect";
 const { GarminConnect } = pkg;
-import { getSetting, setSetting, SETTING_KEYS, getGarminCredentials } from '$lib/server/db';
+import { setSetting, SETTING_KEYS } from "$lib/server/db";
 
 // Login to Garmin and save tokens
 export const POST: RequestHandler = async ({ request, locals }) => {
-	const db = locals.db;
-	if (!db) {
-		throw error(500, 'Database not available');
-	}
+  const db = locals.db;
+  if (!db) {
+    throw error(500, "Database not available");
+  }
 
-	try {
-		// Get credentials from request body or fallback to env/db
-		const body = await request.json().catch(() => ({}));
-		
-		let email = body.email;
-		let password = body.password;
-		
-		// If not provided in body, try env/db
-		if (!email || !password) {
-			const creds = await getGarminCredentials(db);
-			if (creds) {
-				email = creds.email;
-				password = creds.password;
-			}
-		}
+  try {
+    // Get credentials from request body or fallback to env/db
+    const body = await request.json().catch(() => ({}));
 
-		if (!email || !password) {
-			return json({
-				success: false,
-				error: 'Garmin credentials required. Set GARMIN_EMAIL/GARMIN_PASSWORD in .env or provide in request body.'
-			}, { status: 400 });
-		}
+    let email = body.email;
+    let password = body.password;
 
-		console.log(`🔑 Attempting Garmin login for ${email}...`);
+    // If not provided in body, try env/db
+    if (!email || !password) {
+      const creds = await getGarminCredentials(db);
+      if (creds) {
+        email = creds.email;
+        password = creds.password;
+      }
+    }
 
-		// Create Garmin client and login
-		const client = new GarminConnect({
-			username: email,
-			password: password
-		});
+    if (!email || !password) {
+      return json(
+        {
+          success: false,
+          error:
+            "Garmin credentials required. Set GARMIN_EMAIL/GARMIN_PASSWORD in .env or provide in request body.",
+        },
+        { status: 400 },
+      );
+    }
 
-		await client.login();
+    console.log(`🔑 Attempting Garmin login for ${email}...`);
 
-		// Get tokens from client
-		const oauth1 = client.client.oauth1Token;
-		const oauth2 = client.client.oauth2Token;
+    // Create Garmin client and login
+    const client = new GarminConnect({
+      username: email,
+      password: password,
+    });
 
-		if (!oauth1 || !oauth2) {
-			return json({
-				success: false,
-				error: 'Login succeeded but failed to get tokens'
-			}, { status: 500 });
-		}
+    await client.login();
 
-		// Save tokens to database
-		await setSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN, JSON.stringify(oauth1));
-		await setSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN, JSON.stringify(oauth2));
+    // Get tokens from client
+    const oauth1 = client.client.oauth1Token;
+    const oauth2 = client.client.oauth2Token;
 
-		// Also save credentials to DB if they came from body (not env)
-		if (body.email && body.password) {
-			await setSetting(db, SETTING_KEYS.GARMIN_EMAIL, body.email);
-			await setSetting(db, SETTING_KEYS.GARMIN_PASSWORD, body.password);
-		}
+    if (!oauth1 || !oauth2) {
+      return json(
+        {
+          success: false,
+          error: "Login succeeded but failed to get tokens",
+        },
+        { status: 500 },
+      );
+    }
 
-		// Get user profile for confirmation
-		let displayName = 'Unknown';
-		try {
-			const profile = await client.getUserProfile();
-			displayName = profile?.userName || profile?.displayName || 'Unknown';
-		} catch {
-			// Profile fetch is optional
-		}
+    // Save tokens to database
+    await setSetting(
+      db,
+      SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
+      JSON.stringify(oauth1),
+    );
+    await setSetting(
+      db,
+      SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
+      JSON.stringify(oauth2),
+    );
 
-		console.log(`✅ Garmin login successful for ${displayName}`);
+    // Also save credentials to DB if they came from body (not env)
+    if (body.email && body.password) {
+      await setSetting(db, SETTING_KEYS.GARMIN_EMAIL, body.email);
+      await setSetting(db, SETTING_KEYS.GARMIN_PASSWORD, body.password);
+    }
 
-		return json({
-			success: true,
-			displayName,
-			message: 'Logged in and tokens saved'
-		});
+    // Get user profile for confirmation
+    let displayName = "Unknown";
+    try {
+      const profile = await client.getUserProfile();
+      displayName = profile?.userName || profile?.displayName || "Unknown";
+    } catch {
+      // Profile fetch is optional
+    }
 
-	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Unknown error';
-		console.error('❌ Garmin login failed:', message);
+    console.log(`✅ Garmin login successful for ${displayName}`);
 
-		// Provide helpful error messages
-		if (message.includes('401') || message.includes('Unauthorized') || message.includes('credentials')) {
-			return json({
-				success: false,
-				error: 'Invalid Garmin credentials. Please check your email and password.',
-				hint: 'Make sure you can log in at connect.garmin.com with these credentials.'
-			}, { status: 401 });
-		}
+    return json({
+      success: true,
+      displayName,
+      message: "Logged in and tokens saved",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    console.error("❌ Garmin login failed:", message);
 
-		if (message.includes('locked') || message.includes('blocked')) {
-			return json({
-				success: false,
-				error: 'Garmin account is locked or blocked. Try again later.',
-				hint: 'Wait 15-30 minutes before trying again.'
-			}, { status: 429 });
-		}
+    // Provide helpful error messages
+    if (
+      message.includes("401") ||
+      message.includes("Unauthorized") ||
+      message.includes("credentials")
+    ) {
+      return json(
+        {
+          success: false,
+          error:
+            "Invalid Garmin credentials. Please check your email and password.",
+          hint: "Make sure you can log in at connect.garmin.com with these credentials.",
+        },
+        { status: 401 },
+      );
+    }
 
-		return json({
-			success: false,
-			error: `Login failed: ${message}`
-		}, { status: 500 });
-	}
+    if (message.includes("locked") || message.includes("blocked")) {
+      return json(
+        {
+          success: false,
+          error: "Garmin account is locked or blocked. Try again later.",
+          hint: "Wait 15-30 minutes before trying again.",
+        },
+        { status: 429 },
+      );
+    }
+
+    return json(
+      {
+        success: false,
+        error: `Login failed: ${message}`,
+      },
+      { status: 500 },
+    );
+  }
 };
 
 // Check auth status
 export const GET: RequestHandler = async ({ locals }) => {
-	const db = locals.db;
-	if (!db) {
-		throw error(500, 'Database not available');
-	}
+  const db = locals.db;
+  if (!db) {
+    throw error(500, "Database not available");
+  }
 
-	const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
-	
-	if (!oauth2Str) {
-		return json({
-			authenticated: false,
-			message: 'No Garmin tokens found. Login required.'
-		});
-	}
+  const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
 
-	// Try to validate tokens by making a simple API call
-	try {
-		const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
-		if (!oauth1Str) {
-			return json({
-				authenticated: false,
-				message: 'Incomplete tokens. Login required.'
-			});
-		}
+  if (!oauth2Str) {
+    return json({
+      authenticated: false,
+      message: "No Garmin tokens found. Login required.",
+    });
+  }
 
-		const oauth1 = JSON.parse(oauth1Str);
-		const oauth2 = JSON.parse(oauth2Str);
+  // Try to validate tokens by making a simple API call
+  try {
+    const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
+    if (!oauth1Str) {
+      return json({
+        authenticated: false,
+        message: "Incomplete tokens. Login required.",
+      });
+    }
 
-		// Get stored credentials - GarminConnect constructor requires them
-		const creds = await getGarminCredentials(db);
-		if (!creds) {
-			return json({
-				authenticated: false,
-				message: 'Credentials missing. Login required.'
-			});
-		}
+    const oauth1 = JSON.parse(oauth1Str);
+    const oauth2 = JSON.parse(oauth2Str);
 
-		const client = new GarminConnect({
-			username: creds.email,
-			password: creds.password
-		});
-		client.loadToken(oauth1, oauth2);
+    // Get stored credentials - GarminConnect constructor requires them
+    const creds = await getGarminCredentials(db);
+    if (!creds) {
+      return json({
+        authenticated: false,
+        message: "Credentials missing. Login required.",
+      });
+    }
 
-		const profile = await client.getUserProfile();
+    const client = new GarminConnect({
+      username: creds.email,
+      password: creds.password,
+    });
+    client.loadToken(oauth1, oauth2);
 
-		return json({
-			authenticated: true,
-			displayName: profile?.userName || profile?.displayName || 'Unknown',
-			message: 'Garmin connected'
-		});
+    const profile = await client.getUserProfile();
 
-	} catch (err) {
-		const message = err instanceof Error ? err.message : 'Unknown error';
-		
-		// Token might be expired
-		if (message.includes('401') || message.includes('expired')) {
-			return json({
-				authenticated: false,
-				message: 'Garmin session expired. Re-login required.',
-				canAutoRefresh: true
-			});
-		}
+    return json({
+      authenticated: true,
+      displayName: profile?.userName || profile?.displayName || "Unknown",
+      message: "Garmin connected",
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
 
-		return json({
-			authenticated: false,
-			message: `Token validation failed: ${message}`
-		});
-	}
+    // Token might be expired
+    if (message.includes("401") || message.includes("expired")) {
+      return json({
+        authenticated: false,
+        message: "Garmin session expired. Re-login required.",
+        canAutoRefresh: true,
+      });
+    }
+
+    return json({
+      authenticated: false,
+      message: `Token validation failed: ${message}`,
+    });
+  }
 };
-
