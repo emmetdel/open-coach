@@ -6,7 +6,7 @@ import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import pkg from "garmin-connect";
 const { GarminConnect } = pkg;
-import { setSetting, SETTING_KEYS } from "$lib/server/db";
+import { setSetting, getSetting, getGarminCredentials, SETTING_KEYS } from "$lib/server/db";
 
 // Login to Garmin and save tokens
 export const POST: RequestHandler = async ({ request, locals }) => {

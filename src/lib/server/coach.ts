@@ -17,20 +17,32 @@ import {
   getRunFeedbackUserPrompt,
   getMilestoneCelebration,
   getMilestoneContext,
+  getChatSystemPrompt,
   DEFAULT_FEEDBACK_MESSAGES,
 } from "$lib/prompts";
+import { PLAN_TOOLS, executePlanTool, type ToolDefinition } from "./tools";
+import { insertChatMessage, getChatHistory, type ChatMessage } from "./db";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
-interface ChatMessage {
-  role: "system" | "user" | "assistant";
+// Simple message type for OpenRouter API (without DB fields)
+interface ApiMessage {
+  role: "user" | "assistant" | "system";
   content: string;
 }
 
 interface OpenRouterResponse {
   choices: {
     message: {
-      content: string;
+      content: string | null;
+      tool_calls?: {
+        id: string;
+        type: "function";
+        function: {
+          name: string;
+          arguments: string;
+        };
+      }[];
     };
   }[];
 }
@@ -39,9 +51,24 @@ interface OpenRouterResponse {
 async function callOpenRouter(
   apiKey: string,
   model: string,
-  messages: ChatMessage[],
-  maxTokens = 200,
-): Promise<string> {
+  messages: ApiMessage[],
+  tools?: ToolDefinition[], // Add tools support
+  maxTokens = 500, // Increased for tool calls
+): Promise<{ content: string; toolCalls?: any[] }> {
+  const body: any = {
+    model,
+    messages,
+    max_tokens: maxTokens,
+    temperature: 0.9, // Higher creativity for varied, specific responses
+  };
+
+  if (tools) {
+    body.tools = tools.map((t) => ({
+      type: "function",
+      function: t,
+    }));
+  }
+
   const response = await fetch(OPENROUTER_API_URL, {
     method: "POST",
     headers: {
@@ -50,12 +77,7 @@ async function callOpenRouter(
       "HTTP-Referer": "https://opencoach.run",
       "X-Title": "OpenCoach",
     },
-    body: JSON.stringify({
-      model,
-      messages,
-      max_tokens: maxTokens,
-      temperature: 0.7,
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!response.ok) {
@@ -64,7 +86,12 @@ async function callOpenRouter(
   }
 
   const data = (await response.json()) as OpenRouterResponse;
-  return data.choices[0]?.message?.content ?? "Great effort today!";
+  const choice = data.choices[0]?.message;
+
+  return {
+    content: choice?.content || "",
+    toolCalls: choice?.tool_calls,
+  };
 }
 
 import type { LocalDatabase } from "./sqlite";
@@ -213,11 +240,11 @@ export async function analyzeRun(
   );
 
   try {
-    const feedback = await callOpenRouter(apiKey, model, [
+    const response = await callOpenRouter(apiKey, model, [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ]);
-    return celebrationPrefix + feedback;
+    return celebrationPrefix + response.content;
   } catch (error) {
     console.error("Failed to get AI feedback:", error);
     return (
@@ -237,6 +264,7 @@ export async function validateApiKey(
       apiKey,
       model || DEFAULT_MODEL,
       [{ role: "user", content: 'Say "OK" if this works.' }],
+      undefined, // no tools
       10,
     );
     return true;
@@ -286,9 +314,7 @@ interface FullPlanResponse {
 }
 
 // Generate a full multi-week training plan (like Runna)
-export async function generateFullPlan(
-  db: Database,
-): Promise<{
+export async function generateFullPlan(db: Database): Promise<{
   success: boolean;
   runsCreated: number;
   totalWeeks: number;
@@ -553,4 +579,97 @@ function getNextDateForDay(dayName: string): string | null {
   targetDate.setDate(today.getDate() + daysUntil);
 
   return targetDate.toISOString().split("T")[0];
+}
+
+// =========== Chat Processing ===========
+
+export async function processUserMessage(
+  db: Database,
+  userContent: string,
+): Promise<string> {
+  const { apiKey, model } = await getOpenRouterCredentials(db);
+  if (!apiKey) {
+    return "I need an OpenRouter API key to chat. Please check your settings.";
+  }
+
+  // 1. Save user message
+  const userMsgId = crypto.randomUUID();
+  await insertChatMessage(db, {
+    id: userMsgId,
+    role: "user",
+    content: userContent,
+    created_at: new Date().toISOString(),
+    context_type: "general",
+    context_id: null,
+  });
+
+  // 2. Get context (recent history + plan context)
+  const history = await getChatHistory(db, 10);
+  const messages: ApiMessage[] = history.map((h) => ({
+    role: h.role as "user" | "assistant" | "system",
+    content: h.content,
+  }));
+
+  // Add system prompt with context
+  // We could make this smarter by pulling specific plan details if asked
+  const systemPrompt = getChatSystemPrompt(
+    "User is asking for help with their training.",
+  );
+  messages.unshift({ role: "system", content: systemPrompt });
+
+  // 3. Call AI with Tools
+  try {
+    const response = await callOpenRouter(apiKey, model, messages, PLAN_TOOLS);
+
+    let finalContent = response.content;
+
+    // 4. Handle Tool Calls
+    if (response.toolCalls && response.toolCalls.length > 0) {
+      // Add assistant message with tool calls to history (required by API usually, but for local history we just store the text intent if content exists)
+      // For the API conversation flow, we need to append the tool calls.
+      // For our simplified storage, we'll store the "Thought" as the assistant message if it exists.
+
+      for (const toolCall of response.toolCalls) {
+        const toolName = toolCall.function.name;
+        const args = JSON.parse(toolCall.function.arguments);
+
+        console.log(`[Coach] Executing tool: ${toolName}`, args);
+
+        const toolResult = await executePlanTool(db, toolName, args, userMsgId);
+
+        // Add tool result to the conversation for the final response
+        messages.push({
+          role: "assistant", // This should technically be the tool_calls message, but simplifying for now
+          content: response.content || "I am processing your request...",
+        });
+
+        // We need to send the tool output back to the model to get the final natural language response
+        messages.push({
+          role: "user", // Representing the system/tool output as a user message for simplicity with some models, or properly as 'tool' if supporting strictly
+          content: `Tool '${toolName}' Output: ${toolResult.message}`,
+        });
+      }
+
+      // Get final response after tools
+      const finalResponse = await callOpenRouter(apiKey, model, messages);
+      finalContent = finalResponse.content;
+    }
+
+    // 5. Save Assistant Response
+    if (finalContent) {
+      await insertChatMessage(db, {
+        id: crypto.randomUUID(),
+        role: "assistant",
+        content: finalContent,
+        created_at: new Date().toISOString(),
+        context_type: "general",
+        context_id: null,
+      });
+    }
+
+    return finalContent || "I processed that, but I'm not sure what to say.";
+  } catch (error: any) {
+    console.error("Chat Error:", error);
+    return "I'm having trouble connecting to my brain right now. Please try again.";
+  }
 }

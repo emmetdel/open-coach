@@ -279,28 +279,56 @@
     // Generate consistency bars for visualization
     // Match SQLite's strftime('%Y-%W') format: YYYY-WW where WW is 00-53
     function getWeekKey(date: Date): string {
+        // Use ISO week format to match SQLite's strftime('%Y-%W', date)
         const year = date.getFullYear();
-        const startOfYear = new Date(year, 0, 1);
-        const dayOfYear = Math.floor(
-            (date.getTime() - startOfYear.getTime()) / 86400000,
+        const month = String(date.getMonth() + 1).padStart(2, "0");
+        const day = String(date.getDate()).padStart(2, "0");
+        const dateStr = `${year}-${month}-${day}`;
+
+        // Get ISO week number (same as SQLite %W format)
+        const d = new Date(date);
+        d.setHours(0, 0, 0, 0);
+        d.setDate(d.getDate() + 4 - (d.getDay() || 7));
+        const yearStart = new Date(d.getFullYear(), 0, 1);
+        const weekNum = Math.ceil(
+            ((d.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
         );
-        const weekNum = Math.floor((dayOfYear + startOfYear.getDay()) / 7);
-        return `${year}-${String(weekNum).padStart(2, "0")}`;
+
+        return `${d.getFullYear()}-${String(weekNum - 1).padStart(2, "0")}`;
     }
 
     function getConsistencyBars() {
         const weeks = [];
-        // Generate weeks from 7 weeks ago to current week (oldest to newest)
-        for (let i = 7; i >= 0; i--) {
-            const date = new Date();
-            date.setDate(date.getDate() - i * 7);
-            const weekKey = getWeekKey(date);
-            const stat = data.weeklyStats.find((w) => w.week === weekKey);
+        const today = new Date();
+
+        // Get the Monday of the current week (weeks run Mon-Sun)
+        const currentDay = today.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const daysFromMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const thisMonday = new Date(today);
+        thisMonday.setDate(today.getDate() - daysFromMonday);
+        thisMonday.setHours(0, 0, 0, 0);
+
+        // Generate last 8 weeks (Monday to Sunday), newest to oldest
+        for (let i = 0; i <= 7; i++) {
+            const weekStart = new Date(thisMonday);
+            weekStart.setDate(thisMonday.getDate() - i * 7);
+
+            const weekEnd = new Date(weekStart);
+            weekEnd.setDate(weekStart.getDate() + 6);
+            weekEnd.setHours(23, 59, 59, 999);
+
+            // Count runs in this Monday-Sunday week
+            const runsInWeek = data.runs.filter((run) => {
+                const runDate = new Date(run.date);
+                return runDate >= weekStart && runDate <= weekEnd;
+            });
+
             weeks.push({
-                week: weekKey,
-                count: stat?.count || 0,
+                weekStart: weekStart.toISOString().split("T")[0],
+                count: runsInWeek.length,
             });
         }
+
         return weeks;
     }
 
@@ -311,7 +339,7 @@
 </script>
 
 <div
-    class="min-h-screen bg-gradient-to-br from-slate-925 via-slate-900 to-slate-925"
+    class="min-h-screen bg-linear-to-br from-slate-925 via-slate-900 to-slate-925"
 >
     <!-- Garmin Re-Auth Modal -->
     <GarminAuthModal
@@ -487,10 +515,10 @@
     <!-- Background effects -->
     <div class="pointer-events-none fixed inset-0">
         <div
-            class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-gradient-stops))] from-forest-900/10 via-transparent to-transparent"
+            class="absolute inset-0 bg-[radial-gradient(ellipse_at_top_left,_var(--tw-linear-stops))] from-forest-900/10 via-transparent to-transparent"
         ></div>
         <div
-            class="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-gradient-stops))] from-coral-900/5 via-transparent to-transparent"
+            class="absolute inset-0 bg-[radial-gradient(ellipse_at_bottom_right,_var(--tw-linear-stops))] from-coral-900/5 via-transparent to-transparent"
         ></div>
     </div>
 
@@ -508,7 +536,7 @@
                     class="flex items-center gap-2 sm:gap-3 hover:opacity-80 transition-opacity"
                 >
                     <div
-                        class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30"
+                        class="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-linear-to-br from-forest-500 to-forest-600 shadow-lg shadow-forest-900/30"
                     >
                         <Zap class="h-4 w-4 sm:h-5 sm:w-5 text-white" />
                     </div>
@@ -630,7 +658,7 @@
             <!-- Next Run Hero -->
             {#if data.nextRun}
                 <Card
-                    class="mb-6 sm:mb-8 border-forest-500/30 bg-gradient-to-br from-forest-900/20 to-slate-900"
+                    class="mb-6 sm:mb-8 border-forest-500/30 bg-linear-to-br from-forest-900/20 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center justify-between">
@@ -698,7 +726,7 @@
             {:else}
                 <!-- No plan - prompt to generate -->
                 <Card
-                    class="mb-6 sm:mb-8 border-slate-700/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="mb-6 sm:mb-8 border-slate-700/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardContent class="p-6 text-center">
                         <Calendar
@@ -733,7 +761,7 @@
             <!-- Upcoming Runs -->
             {#if data.upcomingPlans.length > 0}
                 <Card
-                    class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="mb-6 sm:mb-8 border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardHeader
                         class="flex flex-row items-center justify-between p-4 sm:p-6"
@@ -796,7 +824,7 @@
             <!-- Stats Grid -->
             <div class="mb-6 sm:mb-8 grid gap-3 sm:gap-4 sm:grid-cols-3">
                 <Card
-                    class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center gap-3 sm:gap-4">
@@ -822,7 +850,7 @@
                 </Card>
 
                 <Card
-                    class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center gap-3 sm:gap-4">
@@ -848,7 +876,7 @@
                 </Card>
 
                 <Card
-                    class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center gap-3 sm:gap-4">
@@ -878,7 +906,7 @@
             <div class="mb-6 sm:mb-8 grid gap-3 sm:gap-4 sm:grid-cols-2">
                 <!-- Streak Card -->
                 <Card
-                    class="border-amber-500/20 bg-gradient-to-br from-amber-900/10 to-slate-900"
+                    class="border-amber-500/20 bg-linear-to-br from-amber-900/10 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center justify-between">
@@ -935,7 +963,7 @@
 
                 <!-- Tips Card -->
                 <Card
-                    class="border-sky-500/20 bg-gradient-to-br from-sky-900/10 to-slate-900"
+                    class="border-sky-500/20 bg-linear-to-br from-sky-900/10 to-slate-900"
                 >
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center gap-2 mb-3">
@@ -967,7 +995,7 @@
             <!-- Progress Card (if user has runs) -->
             {#if data.progress.totalRuns > 0}
                 <Card
-                    class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                    class="mb-6 sm:mb-8 border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
                 >
                     <CardHeader class="p-4 sm:p-6">
                         <CardTitle
@@ -1091,7 +1119,7 @@
 
             <!-- Consistency Chart -->
             <Card
-                class="mb-6 sm:mb-8 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                class="mb-6 sm:mb-8 border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
             >
                 <CardHeader class="p-4 sm:p-6">
                     <CardTitle
@@ -1114,7 +1142,7 @@
                             <div
                                 class="w-full rounded-t-lg transition-all duration-500 {bar.count >
                                 0
-                                    ? 'bg-gradient-to-t from-forest-600 to-forest-400'
+                                    ? 'bg-linear-to-t from-forest-600 to-forest-400'
                                     : 'bg-slate-700/50'}"
                                 style="height: {barHeight}px;"
                                 style:animation-delay="{i * 50}ms"
@@ -1140,7 +1168,7 @@
 
             <!-- Recent Runs -->
             <Card
-                class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                class="border-slate-800/50 bg-linear-to-br from-slate-850 to-slate-900"
             >
                 <CardHeader class="p-4 sm:p-6">
                     <CardTitle class="text-base sm:text-lg"

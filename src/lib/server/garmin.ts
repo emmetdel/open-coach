@@ -27,7 +27,14 @@ export interface GarminActivity {
   activityType: {
     typeKey: string;
   };
-  mapPolyline?: string;
+  mapPolyline?:
+    | string
+    | Array<{
+        lat: number;
+        lon: number;
+        altitude?: number | null;
+        time?: number;
+      }>;
 }
 
 export interface NormalizedRun {
@@ -149,17 +156,58 @@ export async function fetchRecentRuns(
           // Merge details with the activity summary
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const detailsAny = details as any;
+
+          // Try multiple possible locations for the polyline
+          let polyline =
+            detailsAny?.summaryPolyline?.polyline ||
+            detailsAny?.geoPolyline?.polyline ||
+            detailsAny?.polyline ||
+            detailsAny?.metadataDTO?.summaryPolyline?.polyline ||
+            detailsAny?.summaryDTO?.geoPolyline ||
+            detailsAny?.summaryDTO?.polyline ||
+            activity.mapPolyline ||
+            null;
+
+          // If still no polyline, try direct API calls for the activity polyline
+          if (!polyline && detailsAny?.metadataDTO?.hasPolyline) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const httpClient = (client as any).client;
+
+            // Try multiple possible polyline endpoints
+            const endpoints = [
+              `https://connectapi.garmin.com/activity-service/activity/${activity.activityId}/details`,
+              `https://connect.garmin.com/modern/proxy/activity-service/activity/${activity.activityId}/details`,
+              `https://connectapi.garmin.com/activity-service/activity/${activity.activityId}`,
+            ];
+
+            for (const endpoint of endpoints) {
+              try {
+                const data = await httpClient.get(endpoint);
+
+                // Try different possible polyline locations in response
+                polyline =
+                  data?.geoPolylineDTO?.polyline ||
+                  data?.summaryPolylineDTO?.polyline ||
+                  data?.activityDetailMetrics?.geoPolylineDTO?.polyline ||
+                  null;
+
+                if (polyline) {
+                  break;
+                }
+              } catch (err) {
+                // Try next endpoint
+              }
+            }
+          }
+
           return {
             ...activity,
-            mapPolyline:
-              detailsAny?.summaryPolyline?.polyline ||
-              activity.mapPolyline ||
-              null,
+            mapPolyline: polyline,
           };
         } catch (err) {
           console.error(
             `Failed to fetch details for activity ${activity.activityId}:`,
-            err,
+            err instanceof Error ? err.message : err,
           );
           // Return activity without polyline if details fetch fails
           return activity;
@@ -183,8 +231,56 @@ export async function fetchRecentRuns(
   }
 }
 
+// Encode GPS coordinates to polyline format (Google polyline algorithm)
+function encodePolyline(
+  coordinates: Array<{ lat: number; lon: number }>,
+): string {
+  let result = "";
+  let prevLat = 0;
+  let prevLng = 0;
+
+  for (const coord of coordinates) {
+    const lat = Math.round(coord.lat * 1e5);
+    const lng = Math.round(coord.lon * 1e5);
+
+    result += encodeValue(lat - prevLat);
+    result += encodeValue(lng - prevLng);
+
+    prevLat = lat;
+    prevLng = lng;
+  }
+
+  return result;
+}
+
+function encodeValue(value: number): string {
+  value = value < 0 ? ~(value << 1) : value << 1;
+  let result = "";
+
+  while (value >= 0x20) {
+    result += String.fromCharCode((0x20 | (value & 0x1f)) + 63);
+    value >>= 5;
+  }
+
+  result += String.fromCharCode(value + 63);
+  return result;
+}
+
 // Normalize Garmin activity to our database format
 export function normalizeActivity(activity: GarminActivity): NormalizedRun {
+  // Handle polyline - could be string or array of coordinates
+  let polyline: string | null = null;
+  if (activity.mapPolyline) {
+    if (typeof activity.mapPolyline === "string") {
+      polyline = activity.mapPolyline;
+    } else if (Array.isArray(activity.mapPolyline)) {
+      // Encode coordinates array to polyline string
+      polyline = encodePolyline(
+        activity.mapPolyline as Array<{ lat: number; lon: number }>,
+      );
+    }
+  }
+
   return {
     garmin_activity_id: String(activity.activityId),
     date: activity.startTimeLocal,
@@ -193,7 +289,7 @@ export function normalizeActivity(activity: GarminActivity): NormalizedRun {
     avg_hr: activity.averageHR ? Math.round(activity.averageHR) : null,
     max_hr: activity.maxHR ? Math.round(activity.maxHR) : null,
     stress_score: null,
-    map_polyline: activity.mapPolyline || null,
+    map_polyline: polyline,
   };
 }
 
