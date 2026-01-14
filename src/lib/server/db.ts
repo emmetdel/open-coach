@@ -44,6 +44,7 @@ export interface TrainingPlan {
   status: "Pending" | "Completed" | "Missed" | "Rescheduled";
   google_event_id: string | null;
   garmin_workout_id: string | null;
+  goal_id: string | null;
 }
 
 export interface PushSubscription {
@@ -141,7 +142,7 @@ export const AVAILABLE_MODELS = [
   { id: "deepseek/deepseek-chat", name: "DeepSeek Chat", provider: "DeepSeek" },
 ] as const;
 
-type Database = LocalDatabase;
+export type Database = LocalDatabase;
 
 // Get a single setting
 export async function getSetting(
@@ -819,4 +820,16 @@ export async function updateGoal(
 // Delete goal
 export async function deleteGoal(db: Database, id: string): Promise<void> {
   await db.prepare("DELETE FROM training_goals WHERE id = ?").bind(id).run();
+}
+
+// Get all completed/missed workouts for display (historical data)
+export async function getHistoricalWorkouts(
+  db: Database,
+  goalId?: string,
+): Promise<TrainingPlan[]> {
+  const query = goalId
+    ? "SELECT * FROM training_plan WHERE goal_id = ? AND status IN ('Completed', 'Missed') ORDER BY scheduled_date"
+    : "SELECT * FROM training_plan WHERE status IN ('Completed', 'Missed') ORDER BY scheduled_date";
+
+  return await db.prepare(query).bind(goalId).all<TrainingPlan>();
 }

@@ -64,6 +64,12 @@ export function startCronJobs(): void {
     callCronEndpoint("/api/plan", "Weekly Planner");
   });
 
+  // Weekly adjustment - Sunday 8:30 PM (after planner)
+  // "30 20 * * 0"
+  cron.schedule("30 20 * * 0", () => {
+    callCronEndpoint("/api/cron/weekly-adjustment", "Weekly Plan Adjustment");
+  });
+
   // Check for missed runs - 9 AM daily
   // "0 9 * * *"
   cron.schedule("0 9 * * *", () => {
@@ -76,6 +82,7 @@ export function startCronJobs(): void {
   console.log("  - Morning reminder: 7 AM daily");
   console.log("  - Evening reminder: 8 PM daily");
   console.log("  - Weekly planner: Sunday 8 PM");
+  console.log("  - Weekly adjustment: Sunday 8:30 PM");
   console.log("  - Missed run check: 9 AM daily");
 }
 

@@ -187,6 +187,11 @@
 			return;
 		}
 
+		if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+			error = 'Push notifications are disabled for local development';
+			return;
+		}
+
 		try {
 			// Register service worker
 			const registration = await navigator.serviceWorker.register('/sw.js');

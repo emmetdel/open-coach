@@ -258,7 +258,7 @@
         syncMessage = "";
 
         try {
-            const res = await fetch("/api/plan", { method: "POST" });
+            const res = await fetch("/api/plan/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ goalId: data.primaryGoal?.id }) });
             const result: { success: boolean; message?: string } =
                 await res.json();
 
@@ -566,6 +566,12 @@
                             Plan
                         </Button>
                     </a>
+                    <a href="/goals">
+                        <Button variant="ghost" size="sm" class="h-9 px-4">
+                            <Target class="h-4 w-4 mr-2" />
+                            Goals
+                        </Button>
+                    </a>
                 </nav>
 
                 <!-- Actions -->
@@ -632,6 +638,13 @@
                         <Calendar class="h-5 w-5" />
                         <span class="text-xs">Plan</span>
                     </a>
+                    <a
+                        href="/goals"
+                        class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
+                    >
+                        <Target class="h-5 w-5" />
+                        <span class="text-xs">Goals</span>
+                    </a>
                     <button
                         onclick={syncNow}
                         class="flex flex-col items-center gap-1 py-2 px-3 text-slate-400 hover:text-white transition-colors"
@@ -664,7 +677,7 @@
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
                                 <p
-                                    class="text-xs sm:text-sm font-medium uppercase tracking-wider text-forest-400"
+                                    class="text-xs sm:text-sm font-medium uppercase tracking-wider text-accent-300"
                                 >
                                     Next Run
                                 </p>
@@ -697,7 +710,7 @@
                                         variant="default"
                                         size="sm"
                                         disabled={runningNow}
-                                        class="bg-forest-600 hover:bg-forest-700"
+                                        class="bg-forest-600 hover:bg-forest-700 text-base"
                                     >
                                         {#if runningNow}
                                             <RefreshCw
@@ -1165,6 +1178,99 @@
                     </p>
                 </CardContent>
             </Card>
+
+            <!-- Active Goal Card -->
+            {#if data.primaryGoal && data.primaryGoalProgress}
+                <Card
+                    class="mb-8 border-forest-800/50 bg-linear-to-br from-forest-900 to-slate-900"
+                >
+                    <CardHeader>
+                        <CardTitle class="flex items-center gap-2">
+                            <Target class="h-5 w-5 text-forest-400" />
+                            <span>{data.primaryGoal.name}</span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="mb-4">
+                            <div class="mb-1 flex justify-between text-sm">
+                                <span class="text-slate-300"
+                                    >Progress to Goal</span
+                                >
+                                <span class="font-semibold text-white"
+                                    >{data.primaryGoalProgress
+                                        .percentComplete}%</span
+                                >
+                            </div>
+                            <div class="h-2 w-full rounded-full bg-slate-700">
+                                <div
+                                    class="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-500"
+                                    style="width: {data.primaryGoalProgress
+                                        .percentComplete}%"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <div class="text-slate-400">Target Date</div>
+                                <div class="font-semibold text-white">
+                                    {new Date(
+                                        data.primaryGoal.target_date,
+                                    ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                    })}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">
+                                    Weeks Remaining
+                                </div>
+                                <div class="font-semibold text-white">
+                                    {data.primaryGoalProgress.weeksRemaining}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">Longest Run</div>
+                                <div class="font-semibold text-white">
+                                    {data.primaryGoalProgress.longestRun.toFixed(
+                                        1,
+                                    )}km
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">Status</div>
+                                <div
+                                    class="font-semibold {data
+                                        .primaryGoalProgress.status ===
+                                    'on_track'
+                                        ? 'text-green-400'
+                                        : data.primaryGoalProgress.status ===
+                                            'ahead'
+                                          ? 'text-blue-400'
+                                          : 'text-yellow-400'}"
+                                >
+                                    {data.primaryGoalProgress.status ===
+                                    "on_track"
+                                        ? "On track ✓"
+                                        : data.primaryGoalProgress.status ===
+                                            "ahead"
+                                          ? "Ahead ⚡"
+                                          : "Behind ⚠️"}
+                                </div>
+                            </div>
+                        </div>
+
+                        <a
+                            href="/goals"
+                            class="mt-4 inline-block text-forest-400 hover:text-forest-300 hover:underline text-sm"
+                        >
+                            View all goals →
+                        </a>
+                    </CardContent>
+                </Card>
+            {/if}
 
             <!-- Recent Runs -->
             <Card

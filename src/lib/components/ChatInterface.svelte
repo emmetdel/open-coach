@@ -11,7 +11,7 @@
     let input = $state("");
     let isLoading = $state(false);
     let isOpen = $state(false);
-    let chatContainer: HTMLElement;
+    let chatContainer = $state<HTMLElement>();
 
     $effect(() => {
         if (messages.length && isOpen) {

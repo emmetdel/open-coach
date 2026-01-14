@@ -14,6 +14,7 @@
         Trophy,
         Settings,
         Zap,
+        Target,
     } from "lucide-svelte";
     import type { PageData } from "./$types";
     import Chart from "$lib/components/ui/chart/Chart.svelte";
@@ -150,14 +151,16 @@
             datasets: [
                 {
                     label: "Completed",
-                    data: data.consistency.weeklyCompletion.map((w) => w.completed),
+                    data: data.consistency.weeklyCompletion.map(
+                        (w) => w.completed,
+                    ),
                     backgroundColor: "#10b981", // forest-500
                     borderRadius: 4,
                 },
                 {
                     label: "Missed",
                     data: data.consistency.weeklyCompletion.map(
-                        (w) => w.planned - w.completed
+                        (w) => w.planned - w.completed,
                     ),
                     backgroundColor: "#ef4444", // red-500
                     borderRadius: 4,
@@ -197,7 +200,8 @@
                 tooltip: {
                     ...commonOptions.plugins.tooltip,
                     callbacks: {
-                        label: (context) => `${context.dataset.label}: ${context.raw} runs`,
+                        label: (context) =>
+                            `${context.dataset.label}: ${context.raw} runs`,
                     },
                 },
             },
@@ -304,6 +308,12 @@
                         <Button variant="ghost" size="sm" class="h-9 px-4">
                             <Calendar class="h-4 w-4 mr-2" />
                             Plan
+                        </Button>
+                    </a>
+                    <a href="/goals">
+                        <Button variant="ghost" size="sm" class="h-9 px-4">
+                            <Target class="h-4 w-4 mr-2" />
+                            Goals
                         </Button>
                     </a>
                 </nav>
@@ -495,159 +505,169 @@
                                     Start Your Plan to See Consistency
                                 </h3>
                                 <p class="mx-auto mt-3 max-w-md text-slate-400">
-                                    Follow your training plan and complete runs to
-                                    see your consistency metrics, streaks, and
-                                    habit health score.
+                                    Follow your training plan and complete runs
+                                    to see your consistency metrics, streaks,
+                                    and habit health score.
                                 </p>
                             </CardContent>
                         </Card>
                     {:else}
                         <!-- Habit Health & Streaks -->
-                    <div class="mb-6 grid gap-4 md:grid-cols-3">
-                        <!-- Habit Health Score -->
+                        <div class="mb-6 grid gap-4 md:grid-cols-3">
+                            <!-- Habit Health Score -->
+                            <Card
+                                class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                            >
+                                <CardContent class="p-6 text-center">
+                                    <div
+                                        class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
+                                    >
+                                        Habit Health
+                                    </div>
+                                    <div
+                                        class="mb-3 font-display text-5xl font-bold {data
+                                            .consistency.healthStatus ===
+                                        'excellent'
+                                            ? 'text-forest-400'
+                                            : data.consistency.healthStatus ===
+                                                'good'
+                                              ? 'text-forest-500'
+                                              : data.consistency
+                                                      .healthStatus ===
+                                                  'slipping'
+                                                ? 'text-amber-500'
+                                                : 'text-red-500'}"
+                                    >
+                                        {data.consistency.habitHealth}%
+                                    </div>
+                                    <p class="text-sm text-slate-300">
+                                        {data.consistency.healthMessage}
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <!-- Current Streak -->
+                            <Card
+                                class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                            >
+                                <CardContent class="p-6 text-center">
+                                    <div
+                                        class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
+                                    >
+                                        Current Streak
+                                    </div>
+                                    <div
+                                        class="mb-1 font-display text-5xl font-bold text-forest-400"
+                                    >
+                                        {data.consistency.currentStreak}
+                                    </div>
+                                    <p class="text-sm text-slate-500">
+                                        {data.consistency.currentStreak === 1
+                                            ? "week"
+                                            : "weeks"} ≥75%
+                                    </p>
+                                </CardContent>
+                            </Card>
+
+                            <!-- Best Streak -->
+                            <Card
+                                class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                            >
+                                <CardContent class="p-6 text-center">
+                                    <div
+                                        class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
+                                    >
+                                        Best Streak
+                                    </div>
+                                    <div
+                                        class="mb-1 font-display text-5xl font-bold text-amber-400"
+                                    >
+                                        {data.consistency.bestStreak}
+                                    </div>
+                                    <p class="text-sm text-slate-500">
+                                        {data.consistency.bestStreak === 1
+                                            ? "week"
+                                            : "weeks"} ≥75%
+                                    </p>
+                                </CardContent>
+                            </Card>
+                        </div>
+
+                        <!-- Weekly Completion Chart -->
                         <Card
-                            class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
+                            class="mb-6 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
                         >
-                            <CardContent class="p-6 text-center">
-                                <div
-                                    class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
-                                >
-                                    Habit Health
-                                </div>
-                                <div
-                                    class="mb-3 font-display text-5xl font-bold {data
-                                        .consistency.healthStatus === 'excellent'
-                                        ? 'text-forest-400'
-                                        : data.consistency.healthStatus ===
-                                            'good'
-                                          ? 'text-forest-500'
-                                          : data.consistency.healthStatus ===
-                                              'slipping'
-                                            ? 'text-amber-500'
-                                            : 'text-red-500'}"
-                                >
-                                    {data.consistency.habitHealth}%
-                                </div>
-                                <p class="text-sm text-slate-300">
-                                    {data.consistency.healthMessage}
-                                </p>
+                            <CardHeader>
+                                <CardTitle class="flex items-center gap-2">
+                                    <Calendar class="h-5 w-5 text-forest-400" />
+                                    Weekly Completion Rate
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                {#if data.consistency.weeklyCompletion.length > 0}
+                                    <div class="h-64 w-full">
+                                        <Chart
+                                            config={completionChartConfig}
+                                            class="h-full w-full"
+                                        />
+                                    </div>
+                                {:else}
+                                    <p class="py-8 text-center text-slate-400">
+                                        No training plan data yet
+                                    </p>
+                                {/if}
                             </CardContent>
                         </Card>
 
-                        <!-- Current Streak -->
+                        <!-- Calendar Heatmap -->
                         <Card
                             class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
                         >
-                            <CardContent class="p-6 text-center">
-                                <div
-                                    class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
-                                >
-                                    Current Streak
-                                </div>
-                                <div
-                                    class="mb-1 font-display text-5xl font-bold text-forest-400"
-                                >
-                                    {data.consistency.currentStreak}
-                                </div>
-                                <p class="text-sm text-slate-500">
-                                    {data.consistency.currentStreak === 1
-                                        ? "week"
-                                        : "weeks"} ≥75%
-                                </p>
-                            </CardContent>
-                        </Card>
-
-                        <!-- Best Streak -->
-                        <Card
-                            class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
-                        >
-                            <CardContent class="p-6 text-center">
-                                <div
-                                    class="mb-2 text-xs font-medium uppercase tracking-wider text-slate-400"
-                                >
-                                    Best Streak
-                                </div>
-                                <div
-                                    class="mb-1 font-display text-5xl font-bold text-amber-400"
-                                >
-                                    {data.consistency.bestStreak}
-                                </div>
-                                <p class="text-sm text-slate-500">
-                                    {data.consistency.bestStreak === 1
-                                        ? "week"
-                                        : "weeks"} ≥75%
-                                </p>
-                            </CardContent>
-                        </Card>
-                    </div>
-
-                    <!-- Weekly Completion Chart -->
-                    <Card
-                        class="mb-6 border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
-                    >
-                        <CardHeader>
-                            <CardTitle class="flex items-center gap-2">
-                                <Calendar class="h-5 w-5 text-forest-400" />
-                                Weekly Completion Rate
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            {#if data.consistency.weeklyCompletion.length > 0}
-                                <div class="h-64 w-full">
-                                    <Chart
-                                        config={completionChartConfig}
-                                        class="h-full w-full"
-                                    />
-                                </div>
-                            {:else}
-                                <p class="py-8 text-center text-slate-400">
-                                    No training plan data yet
-                                </p>
-                            {/if}
-                        </CardContent>
-                    </Card>
-
-                    <!-- Calendar Heatmap -->
-                    <Card
-                        class="border-slate-800/50 bg-gradient-to-br from-slate-850 to-slate-900"
-                    >
-                        <CardHeader>
-                            <CardTitle class="flex items-center gap-2">
-                                <Activity class="h-5 w-5 text-forest-400" />
-                                Activity Calendar (Last 90 Days)
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <div class="overflow-x-auto">
-                                <div class="inline-grid grid-cols-13 gap-1.5 min-w-full">
-                                    {#each data.consistency.calendarData as day}
+                            <CardHeader>
+                                <CardTitle class="flex items-center gap-2">
+                                    <Activity class="h-5 w-5 text-forest-400" />
+                                    Activity Calendar (Last 90 Days)
+                                </CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                                <div class="overflow-x-auto">
+                                    <div
+                                        class="inline-grid grid-cols-13 gap-1.5 min-w-full"
+                                    >
+                                        {#each data.consistency.calendarData as day}
+                                            <div
+                                                class="h-3 w-3 rounded-sm {day.hasRun
+                                                    ? day.count > 1
+                                                        ? 'bg-forest-400'
+                                                        : 'bg-forest-600'
+                                                    : 'bg-slate-700/30'}"
+                                                title="{new Date(
+                                                    day.date,
+                                                ).toLocaleDateString()}: {day.count} {day.count ===
+                                                1
+                                                    ? 'run'
+                                                    : 'runs'}"
+                                            ></div>
+                                        {/each}
+                                    </div>
+                                    <div
+                                        class="mt-4 flex items-center justify-end gap-2 text-xs text-slate-500"
+                                    >
+                                        <span>Less</span>
                                         <div
-                                            class="h-3 w-3 rounded-sm {day.hasRun
-                                                ? day.count > 1
-                                                    ? 'bg-forest-400'
-                                                    : 'bg-forest-600'
-                                                : 'bg-slate-700/30'}"
-                                            title="{new Date(
-                                                day.date
-                                            ).toLocaleDateString()}: {day.count} {day.count ===
-                                            1
-                                                ? 'run'
-                                                : 'runs'}"
+                                            class="h-3 w-3 rounded-sm bg-slate-700/30"
                                         ></div>
-                                    {/each}
+                                        <div
+                                            class="h-3 w-3 rounded-sm bg-forest-600"
+                                        ></div>
+                                        <div
+                                            class="h-3 w-3 rounded-sm bg-forest-400"
+                                        ></div>
+                                        <span>More</span>
+                                    </div>
                                 </div>
-                                <div
-                                    class="mt-4 flex items-center justify-end gap-2 text-xs text-slate-500"
-                                >
-                                    <span>Less</span>
-                                    <div class="h-3 w-3 rounded-sm bg-slate-700/30"></div>
-                                    <div class="h-3 w-3 rounded-sm bg-forest-600"></div>
-                                    <div class="h-3 w-3 rounded-sm bg-forest-400"></div>
-                                    <span>More</span>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                            </CardContent>
+                        </Card>
                     {/if}
                 </div>
 

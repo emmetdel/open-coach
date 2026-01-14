@@ -42,10 +42,17 @@
 
     onMount(() => {
         // Check notification support
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        
         notificationsSupported =
-            "Notification" in window && "serviceWorker" in navigator;
+            "Notification" in window && "serviceWorker" in navigator && !isLocal;
+        
         if (notificationsSupported) {
             notificationPermission = Notification.permission;
+        }
+
+        if (isLocal) {
+            console.log('[PWA] Service Worker and Push disabled for local development');
         }
 
         // Check if already installed as PWA
