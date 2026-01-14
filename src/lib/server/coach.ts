@@ -5,7 +5,6 @@ import {
   SETTING_KEYS,
   DEFAULT_MODEL,
   insertPlan,
-  deleteFuturePlans,
   deleteAllPlans,
   getRecentRuns,
   setPlanMetadata,
@@ -493,6 +492,7 @@ function generateWeekWorkouts(
       target_duration_minutes: duration,
       description,
       status: "Pending",
+      goal_id: null, // Legacy plans don't have a specific goal
       google_event_id: null,
       garmin_workout_id: null,
     });

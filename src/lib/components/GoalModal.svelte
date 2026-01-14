@@ -144,10 +144,15 @@
     <div
         class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
         on:click={handleCancel}
+        on:keydown={(e) => e.key === 'Escape' && handleCancel()}
+        role="dialog"
+        aria-modal="true"
     >
         <div
             class="max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-lg bg-slate-800 p-6 shadow-xl"
             on:click|stopPropagation
+            on:keydown={(e) => e.stopPropagation()}
+            role="document"
         >
             <h2 class="mb-6 text-2xl font-bold text-white">
                 {goal ? "Edit Goal" : "Create New Goal"}

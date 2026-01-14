@@ -15,6 +15,8 @@
 
     let { data }: { data: PageData } = $props();
 
+    let goalContext = $derived(data.primaryGoal ? `for ${data.primaryGoal.name} (${data.primaryGoal.target_distance_km}km on ${new Date(data.primaryGoal.target_date).toLocaleDateString()})` : "");
+
     let regenerating = $state(false);
     let message = $state("");
     let calendarRuns = $state(data.runs);
@@ -258,26 +260,62 @@
                         >
                             No Training Plan Yet
                         </h2>
-                        <p class="mx-auto mt-3 max-w-md text-slate-400">
-                            Generate a personalized multi-week training plan
-                            based on your goals and available days.
-                        </p>
+                        {#if data.primaryGoal}
+                            <p class="mx-auto mt-3 max-w-md text-slate-300">
+                                Ready to generate your training plan {goalContext}
+                            </p>
+                            <p class="mt-2 text-sm text-slate-400">
+                                I'll create a personalized week-by-week plan to help you reach your goal.
+                            </p>
+                        {:else}
+                            <p class="mx-auto mt-3 max-w-md text-slate-400">
+                                First, <a href="/goals" class="text-forest-400 hover:underline">set a goal</a>, then generate a personalized training plan.
+                            </p>
+                        {/if}
                         <Button
                             onclick={regeneratePlan}
-                            class="mt-6"
-                            disabled={regenerating}
+                            class="mt-6 bg-forest-600 hover:bg-forest-700"
+                            disabled={regenerating || !data.primaryGoal}
                         >
                             {#if regenerating}
                                 <RefreshCw class="h-4 w-4 animate-spin" />
                                 Generating...
                             {:else}
                                 <Zap class="h-4 w-4" />
-                                Generate Plan
+                                Generate Training Plan
                             {/if}
                         </Button>
+                        {#if !data.primaryGoal}
+                            <p class="mt-3 text-xs text-slate-500">
+                                Create a goal first to generate your plan
+                            </p>
+                        {/if}
                     </CardContent>
                 </Card>
             {:else}
+                <!-- Goal Context Banner -->
+                {#if data.primaryGoal}
+                    <div class="mb-4 rounded-xl border border-forest-500/30 bg-gradient-to-r from-forest-900/20 to-slate-900 p-4">
+                        <div class="flex items-center justify-between flex-wrap gap-3">
+                            <div class="flex items-center gap-3">
+                                <div class="flex h-10 w-10 items-center justify-center rounded-lg bg-forest-500/20">
+                                    <Target class="h-5 w-5 text-forest-400" />
+                                </div>
+                                <div>
+                                    <p class="text-xs text-slate-400">Training for</p>
+                                    <p class="font-semibold text-white">{data.primaryGoal.name}</p>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-xs text-slate-400">Target</p>
+                                <p class="font-semibold text-forest-400">
+                                    {data.primaryGoal.target_distance_km}km • {new Date(data.primaryGoal.target_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                {/if}
+                
                 <!-- Plan Overview -->
                 <div
                     class="mb-8 rounded-xl border border-forest-500/30 bg-gradient-to-br from-slate-850 to-slate-900 p-6"

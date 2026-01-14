@@ -33,7 +33,7 @@
     let subscribing = $state(false);
     let notificationMessage = $state("");
     let isInstalled = $state(false);
-    let deferredPrompt: BeforeInstallPromptEvent | null = null;
+    let deferredPrompt = $state<BeforeInstallPromptEvent | null>(null);
 
     interface BeforeInstallPromptEvent extends Event {
         prompt(): Promise<void>;
@@ -41,6 +41,12 @@
     }
 
     onMount(() => {
+        // Initialize form values from data
+        openrouterModel = data.settings?.openrouterModel || "anthropic/claude-sonnet-4";
+        targetDate = data.settings?.targetDate || "";
+        availableDays = data.settings?.availableDays || [];
+        currentFitness = data.settings?.currentFitness || "";
+        
         // Check notification support
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
         
@@ -165,16 +171,14 @@
 
     // AI Settings
     let openrouterKey = $state("");
-    let openrouterModel = $state(
-        data.settings?.openrouterModel || "anthropic/claude-sonnet-4",
-    );
+    let openrouterModel = $state("anthropic/claude-sonnet-4");
     let savingAI = $state(false);
     let aiMessage = $state("");
 
     // Training Settings
-    let targetDate = $state(data.settings?.targetDate || "");
-    let availableDays = $state<string[]>(data.settings?.availableDays || []);
-    let currentFitness = $state(data.settings?.currentFitness || "");
+    let targetDate = $state("");
+    let availableDays = $state<string[]>([]);
+    let currentFitness = $state("");
     let savingTraining = $state(false);
     let trainingMessage = $state("");
 

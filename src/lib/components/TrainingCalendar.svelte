@@ -174,15 +174,17 @@
 			{@const isCurrentMonthDate = isCurrentMonth(date)}
 			{@const isTodayDate = isToday(date)}
 
-			<div
-				class="min-h-20 rounded-lg border p-2 transition-colors {isTodayDate
-					? 'border-forest-500 bg-slate-800'
-					: 'border-slate-700/50 bg-slate-900'} {isCurrentMonthDate
-					? ''
-					: 'opacity-40'}"
-				ondragover={handleDragOver}
-				ondrop={(e) => handleDrop(e, date)}
-			>
+		<div
+			class="min-h-20 rounded-lg border p-2 transition-colors {isTodayDate
+				? 'border-forest-500 bg-slate-800'
+				: 'border-slate-700/50 bg-slate-900'} {isCurrentMonthDate
+				? ''
+				: 'opacity-40'}"
+			ondragover={handleDragOver}
+			ondrop={(e) => handleDrop(e, date)}
+			role="button"
+			tabindex="0"
+		>
 				<!-- Date number -->
 				<div class="mb-1 flex items-center justify-between">
 					<span

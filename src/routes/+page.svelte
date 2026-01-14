@@ -676,11 +676,20 @@
                     <CardContent class="p-4 sm:p-6">
                         <div class="flex items-center justify-between">
                             <div class="flex-1">
-                                <p
-                                    class="text-xs sm:text-sm font-medium uppercase tracking-wider text-accent-300"
-                                >
-                                    Next Run
-                                </p>
+                                <div class="flex items-center gap-2 mb-1">
+                                    <p
+                                        class="text-xs sm:text-sm font-medium uppercase tracking-wider text-accent-300"
+                                    >
+                                        Next Run
+                                    </p>
+                                    {#if data.primaryGoal}
+                                        <span class="text-xs text-slate-500">•</span>
+                                        <div class="flex items-center gap-1 text-xs text-forest-400">
+                                            <Target class="h-3 w-3" />
+                                            <span>{data.primaryGoal.name}</span>
+                                        </div>
+                                    {/if}
+                                </div>
                                 <h2
                                     class="mt-1 font-display text-xl sm:text-2xl font-bold text-white"
                                 >
@@ -738,37 +747,104 @@
                 </Card>
             {:else}
                 <!-- No plan - prompt to generate -->
-                <Card
-                    class="mb-6 sm:mb-8 border-slate-700/50 bg-linear-to-br from-slate-850 to-slate-900"
-                >
-                    <CardContent class="p-6 text-center">
-                        <Calendar
-                            class="mx-auto h-10 w-10 sm:h-12 sm:w-12 text-slate-500"
-                        />
-                        <h2
-                            class="mt-4 font-display text-lg sm:text-xl font-bold text-white"
-                        >
-                            No Runs Planned
-                        </h2>
-                        <p class="mt-2 text-sm text-slate-400">
-                            Generate a training plan based on your goals and
-                            availability.
-                        </p>
-                        <Button
-                            onclick={generatePlan}
-                            class="mt-4"
-                            disabled={generatingPlan}
-                        >
-                            {#if generatingPlan}
-                                <RefreshCw class="h-4 w-4 animate-spin" />
-                                Generating...
-                            {:else}
-                                <Zap class="h-4 w-4" />
-                                Generate Plan
-                            {/if}
-                        </Button>
-                    </CardContent>
-                </Card>
+                {#if data.primaryGoal}
+                    <!-- Has goal, needs plan -->
+                    <Card
+                        class="mb-6 sm:mb-8 border-forest-500/30 bg-linear-to-br from-forest-900/20 to-slate-900"
+                    >
+                        <CardContent class="p-6">
+                            <div class="text-center">
+                                <div class="flex items-center justify-center gap-3 mb-4">
+                                    <div class="flex items-center gap-2 text-forest-400">
+                                        <Target class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Goal Set</span>
+                                    </div>
+                                    <ChevronRight class="h-4 w-4 text-slate-600" />
+                                    <div class="flex items-center gap-2 text-amber-400">
+                                        <Calendar class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Generate Plan</span>
+                                    </div>
+                                    <ChevronRight class="h-4 w-4 text-slate-600" />
+                                    <div class="flex items-center gap-2 text-slate-500">
+                                        <Activity class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Start Running</span>
+                                    </div>
+                                </div>
+                                
+                                <h2
+                                    class="mt-4 font-display text-lg sm:text-xl font-bold text-white"
+                                >
+                                    Ready to Build Your Training Plan
+                                </h2>
+                                <p class="mt-2 text-sm text-slate-300">
+                                    Goal: <span class="font-semibold text-forest-400">{data.primaryGoal.name}</span>
+                                </p>
+                                <p class="text-sm text-slate-400">
+                                    {data.primaryGoal.target_distance_km}km by {new Date(data.primaryGoal.target_date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                                </p>
+                                <p class="mt-3 text-sm text-slate-400">
+                                    I'll create a personalized training plan based on your goal, current fitness, and available days.
+                                </p>
+                                <Button
+                                    onclick={generatePlan}
+                                    class="mt-4 bg-forest-600 hover:bg-forest-700"
+                                    disabled={generatingPlan}
+                                >
+                                    {#if generatingPlan}
+                                        <RefreshCw class="h-4 w-4 animate-spin" />
+                                        Generating Plan...
+                                    {:else}
+                                        <Zap class="h-4 w-4" />
+                                        Generate Training Plan
+                                    {/if}
+                                </Button>
+                            </div>
+                        </CardContent>
+                    </Card>
+                {:else}
+                    <!-- No goal, needs to create one first -->
+                    <Card
+                        class="mb-6 sm:mb-8 border-slate-700/50 bg-linear-to-br from-slate-850 to-slate-900"
+                    >
+                        <CardContent class="p-6">
+                            <div class="text-center">
+                                <div class="flex items-center justify-center gap-3 mb-4">
+                                    <div class="flex items-center gap-2 text-amber-400">
+                                        <Target class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Set a Goal</span>
+                                    </div>
+                                    <ChevronRight class="h-4 w-4 text-slate-600" />
+                                    <div class="flex items-center gap-2 text-slate-500">
+                                        <Calendar class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Generate Plan</span>
+                                    </div>
+                                    <ChevronRight class="h-4 w-4 text-slate-600" />
+                                    <div class="flex items-center gap-2 text-slate-500">
+                                        <Activity class="h-5 w-5" />
+                                        <span class="text-sm font-medium">Start Running</span>
+                                    </div>
+                                </div>
+                                
+                                <h2
+                                    class="mt-4 font-display text-lg sm:text-xl font-bold text-white"
+                                >
+                                    Let's Start with a Goal
+                                </h2>
+                                <p class="mt-2 text-sm text-slate-400">
+                                    Set a running goal (like "Run a 5K" or "Complete a 10K race"), and I'll create a personalized training plan to help you achieve it.
+                                </p>
+                                <a href="/goals">
+                                    <Button
+                                        class="mt-4 bg-forest-600 hover:bg-forest-700"
+                                    >
+                                        <Target class="h-4 w-4" />
+                                        Create Your First Goal
+                                    </Button>
+                                </a>
+                            </div>
+                        </CardContent>
+                    </Card>
+                {/if}
             {/if}
 
             <!-- Upcoming Runs -->
@@ -830,6 +906,99 @@
                                 </div>
                             {/each}
                         </div>
+                    </CardContent>
+                </Card>
+            {/if}
+
+            <!-- Active Goal Card -->
+            {#if data.primaryGoal && data.primaryGoalProgress}
+                <Card
+                    class="mb-6 sm:mb-8 border-forest-800/50 bg-linear-to-br from-forest-900 to-slate-900"
+                >
+                    <CardHeader>
+                        <CardTitle class="flex items-center gap-2">
+                            <Target class="h-5 w-5 text-forest-400" />
+                            <span>{data.primaryGoal.name}</span>
+                        </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        <div class="mb-4">
+                            <div class="mb-1 flex justify-between text-sm">
+                                <span class="text-slate-300"
+                                    >Progress to Goal</span
+                                >
+                                <span class="font-semibold text-white"
+                                    >{data.primaryGoalProgress
+                                        .percentComplete}%</span
+                                >
+                            </div>
+                            <div class="h-2 w-full rounded-full bg-slate-700">
+                                <div
+                                    class="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-500"
+                                    style="width: {data.primaryGoalProgress
+                                        .percentComplete}%"
+                                ></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <div class="text-slate-400">Target Date</div>
+                                <div class="font-semibold text-white">
+                                    {new Date(
+                                        data.primaryGoal.target_date,
+                                    ).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                    })}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">
+                                    Weeks Remaining
+                                </div>
+                                <div class="font-semibold text-white">
+                                    {data.primaryGoalProgress.weeksRemaining}
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">Longest Run</div>
+                                <div class="font-semibold text-white">
+                                    {data.primaryGoalProgress.longestRun.toFixed(
+                                        1,
+                                    )}km
+                                </div>
+                            </div>
+                            <div>
+                                <div class="text-slate-400">Status</div>
+                                <div
+                                    class="font-semibold {data
+                                        .primaryGoalProgress.status ===
+                                    'on_track'
+                                        ? 'text-green-400'
+                                        : data.primaryGoalProgress.status ===
+                                            'ahead'
+                                          ? 'text-blue-400'
+                                          : 'text-yellow-400'}"
+                                >
+                                    {data.primaryGoalProgress.status ===
+                                    "on_track"
+                                        ? "On track ✓"
+                                        : data.primaryGoalProgress.status ===
+                                            "ahead"
+                                          ? "Ahead ⚡"
+                                          : "Behind ⚠️"}
+                                </div>
+                            </div>
+                        </div>
+
+                        <a
+                            href="/goals"
+                            class="mt-4 inline-block text-forest-400 hover:text-forest-300 hover:underline text-sm"
+                        >
+                            View all goals →
+                        </a>
                     </CardContent>
                 </Card>
             {/if}
@@ -1178,99 +1347,6 @@
                     </p>
                 </CardContent>
             </Card>
-
-            <!-- Active Goal Card -->
-            {#if data.primaryGoal && data.primaryGoalProgress}
-                <Card
-                    class="mb-8 border-forest-800/50 bg-linear-to-br from-forest-900 to-slate-900"
-                >
-                    <CardHeader>
-                        <CardTitle class="flex items-center gap-2">
-                            <Target class="h-5 w-5 text-forest-400" />
-                            <span>{data.primaryGoal.name}</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="mb-4">
-                            <div class="mb-1 flex justify-between text-sm">
-                                <span class="text-slate-300"
-                                    >Progress to Goal</span
-                                >
-                                <span class="font-semibold text-white"
-                                    >{data.primaryGoalProgress
-                                        .percentComplete}%</span
-                                >
-                            </div>
-                            <div class="h-2 w-full rounded-full bg-slate-700">
-                                <div
-                                    class="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-500"
-                                    style="width: {data.primaryGoalProgress
-                                        .percentComplete}%"
-                                ></div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <div class="text-slate-400">Target Date</div>
-                                <div class="font-semibold text-white">
-                                    {new Date(
-                                        data.primaryGoal.target_date,
-                                    ).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                    })}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">
-                                    Weeks Remaining
-                                </div>
-                                <div class="font-semibold text-white">
-                                    {data.primaryGoalProgress.weeksRemaining}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">Longest Run</div>
-                                <div class="font-semibold text-white">
-                                    {data.primaryGoalProgress.longestRun.toFixed(
-                                        1,
-                                    )}km
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">Status</div>
-                                <div
-                                    class="font-semibold {data
-                                        .primaryGoalProgress.status ===
-                                    'on_track'
-                                        ? 'text-green-400'
-                                        : data.primaryGoalProgress.status ===
-                                            'ahead'
-                                          ? 'text-blue-400'
-                                          : 'text-yellow-400'}"
-                                >
-                                    {data.primaryGoalProgress.status ===
-                                    "on_track"
-                                        ? "On track ✓"
-                                        : data.primaryGoalProgress.status ===
-                                            "ahead"
-                                          ? "Ahead ⚡"
-                                          : "Behind ⚠️"}
-                                </div>
-                            </div>
-                        </div>
-
-                        <a
-                            href="/goals"
-                            class="mt-4 inline-block text-forest-400 hover:text-forest-300 hover:underline text-sm"
-                        >
-                            View all goals →
-                        </a>
-                    </CardContent>
-                </Card>
-            {/if}
 
             <!-- Recent Runs -->
             <Card

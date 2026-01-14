@@ -3,6 +3,7 @@ import {
   getPlanMetadata,
   getCurrentWeekNumber,
   hasCompletedSetup,
+  getActiveGoals,
 } from "$lib/server/db";
 import { redirect } from "@sveltejs/kit";
 
@@ -26,13 +27,15 @@ export const load: PageServerLoad = async ({ locals }) => {
     throw redirect(307, "/setup");
   }
 
-  const [metadata, currentWeek] = await Promise.all([
+  const [metadata, currentWeek, goals] = await Promise.all([
     getPlanMetadata(db),
     getCurrentWeekNumber(db),
+    getActiveGoals(db),
   ]);
 
   const planName = metadata["plan_name"] || "Your Training Plan";
   const totalWeeks = parseInt(metadata["total_weeks"] || "0", 10);
+  const primaryGoal = goals.find((g) => g.is_primary) || null;
 
   // Get all training plans for calendar
   const allPlans = await db
@@ -63,5 +66,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     completedWeeks: Math.max(0, currentWeek - 1),
     runs,
     hasPlan: totalWeeks > 0,
+    primaryGoal,
+    generationStrategy: metadata["generation_strategy"] || "legacy",
   };
 };
