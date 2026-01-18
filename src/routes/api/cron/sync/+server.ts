@@ -11,6 +11,7 @@ import {
 	updateRunFeedback,
 	hasCompletedSetup
 } from '$lib/server/db';
+import { isCronAuthorized } from '$lib/server/cronAuth';
 
 export const GET: RequestHandler = async ({ locals, request }) => {
 	const db = locals.db;
@@ -18,11 +19,9 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 		throw error(500, 'Database not available');
 	}
 
-	// Optional: Verify this is a cron request (check for cron header)
-	const isCron = request.headers.get('x-cron-secret') !== null;
-	if (!isCron) {
-		// Allow manual triggers for testing but log it
-		console.log('Manual cron trigger');
+	// Verify cron secret
+	if (!isCronAuthorized(request)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	// Check if setup is complete

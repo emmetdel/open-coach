@@ -5,11 +5,17 @@ import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sendRunReminders } from '$lib/server/reminders';
 import { hasCompletedSetup } from '$lib/server/db';
+import { isCronAuthorized } from '$lib/server/cronAuth';
 
-export const GET: RequestHandler = async ({ locals, url }) => {
+export const GET: RequestHandler = async ({ locals, url, request }) => {
 	const db = locals.db;
 	if (!db) {
 		throw error(500, 'Database not available');
+	}
+
+	// Verify cron secret
+	if (!isCronAuthorized(request)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	// Check if setup is complete

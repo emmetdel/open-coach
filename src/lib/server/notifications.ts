@@ -87,13 +87,19 @@ async function sendWebPush(
 	const jwt = await createVapidJwt(subscription.endpoint, vapidPublicKey, vapidPrivateKey);
 	
 	// Encrypt the payload using the subscription keys
-	const encrypted = await encryptPayload(body, subscription.keys.p256dh, subscription.keys.auth);
+	const { body: encrypted, salt, publicKey } = await encryptPayload(
+		body,
+		subscription.keys.p256dh,
+		subscription.keys.auth
+	);
 	
 	const response = await fetch(subscription.endpoint, {
 		method: 'POST',
 		headers: {
 			'Content-Type': 'application/octet-stream',
 			'Content-Encoding': 'aes128gcm',
+			'Encryption': `salt=${salt}`,
+			'Crypto-Key': `dh=${publicKey};p256ecdsa=${vapidPublicKey}`,
 			'TTL': '86400',
 			'Authorization': `vapid t=${jwt}, k=${vapidPublicKey}`
 		},
@@ -154,7 +160,7 @@ async function encryptPayload(
 	payload: string,
 	p256dh: string,
 	auth: string
-): Promise<ArrayBuffer> {
+): Promise<{ body: ArrayBuffer; salt: string; publicKey: string }> {
 	// Generate a random salt
 	const salt = crypto.getRandomValues(new Uint8Array(16));
 	
@@ -251,7 +257,11 @@ async function encryptPayload(
 	result.set(new Uint8Array(ephemeralPublicKey as ArrayBuffer), offset); offset += (ephemeralPublicKey as ArrayBuffer).byteLength;
 	result.set(new Uint8Array(encrypted), offset);
 	
-	return result.buffer;
+	return {
+		body: result.buffer,
+		salt: arrayBufferToBase64Url(sliceArrayBuffer(salt)),
+		publicKey: arrayBufferToBase64Url(ephemeralPublicKey as ArrayBuffer)
+	};
 }
 
 // Helper functions for base64url encoding/decoding
@@ -273,6 +283,10 @@ function arrayBufferToBase64Url(buffer: ArrayBuffer): string {
 		binary += String.fromCharCode(bytes[i]);
 	}
 	return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+function sliceArrayBuffer(view: Uint8Array): ArrayBuffer {
+	return view.buffer.slice(view.byteOffset, view.byteOffset + view.byteLength);
 }
 
 // Generate VAPID key pair
@@ -402,4 +416,3 @@ export async function notifyMissedRun(
 		`
 	);
 }
-

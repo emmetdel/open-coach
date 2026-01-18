@@ -3,12 +3,12 @@ import type { RequestHandler } from './$types';
 import { getActiveGoals } from '$lib/server/db';
 import { analyzeWeeklyProgress, adjustNextWeek } from '$lib/server/adaptivePlanner';
 import { sendPushNotification } from '$lib/server/notifications';
+import { isCronAuthorized } from '$lib/server/cronAuth';
 
 // POST /api/cron/weekly-adjustment - Weekly plan adjustment cron job
 export const POST: RequestHandler = async ({ request, locals }) => {
   // Verify cron secret
-  const cronSecret = request.headers.get('x-cron-secret');
-  if (cronSecret !== process.env.CRON_SECRET) {
+  if (!isCronAuthorized(request)) {
     return json({ error: 'Unauthorized' }, { status: 401 });
   }
 

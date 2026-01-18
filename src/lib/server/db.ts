@@ -345,7 +345,7 @@ export async function hasCompletedSetup(db: Database): Promise<boolean> {
 // Get upcoming planned runs for this week only (next 7 days)
 export async function getUpcomingPlans(
   db: Database,
-  _limit = 7,
+  limit = 7,
 ): Promise<TrainingPlan[]> {
   const result = await db
     .prepare(
@@ -353,8 +353,10 @@ export async function getUpcomingPlans(
 			 WHERE scheduled_date >= date('now')
 			   AND scheduled_date <= date('now', '+7 days')
 			   AND status = 'Pending'
-			 ORDER BY scheduled_date ASC`,
+			 ORDER BY scheduled_date ASC
+			 LIMIT ?`,
     )
+    .bind(limit)
     .all<TrainingPlan>();
   return result.results;
 }

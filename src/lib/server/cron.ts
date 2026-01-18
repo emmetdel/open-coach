@@ -6,10 +6,15 @@ import { getDb } from "./db";
 const BASE_URL = process.env.BASE_URL || "http://localhost:3000";
 
 // Helper to call internal API endpoints
-async function callCronEndpoint(path: string, name: string): Promise<void> {
+async function callCronEndpoint(
+  path: string,
+  name: string,
+  method: "GET" | "POST" = "GET",
+): Promise<void> {
   try {
     console.log(`[Cron] Running ${name}...`);
     const response = await fetch(`${BASE_URL}${path}`, {
+      method,
       headers: {
         "X-Cron-Secret": process.env.CRON_SECRET || "local-dev",
       },
@@ -61,19 +66,23 @@ export function startCronJobs(): void {
   // Planner - Sunday 8 PM
   // "0 20 * * 0"
   cron.schedule("0 20 * * 0", () => {
-    callCronEndpoint("/api/plan", "Weekly Planner");
+    callCronEndpoint("/api/plan", "Weekly Planner", "POST");
   });
 
   // Weekly adjustment - Sunday 8:30 PM (after planner)
   // "30 20 * * 0"
   cron.schedule("30 20 * * 0", () => {
-    callCronEndpoint("/api/cron/weekly-adjustment", "Weekly Plan Adjustment");
+    callCronEndpoint(
+      "/api/cron/weekly-adjustment",
+      "Weekly Plan Adjustment",
+      "POST",
+    );
   });
 
   // Check for missed runs - 9 AM daily
   // "0 9 * * *"
   cron.schedule("0 9 * * *", () => {
-    callCronEndpoint("/api/cron/check-missed", "Missed Run Check");
+    callCronEndpoint("/api/cron/check-missed", "Missed Run Check", "POST");
   });
 
   console.log("[Cron] Scheduled tasks:");

@@ -4,6 +4,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { getSetting, setSetting, SETTING_KEYS, hasCompletedSetup } from '$lib/server/db';
+import { isCronAuthorized } from '$lib/server/cronAuth';
 
 interface OAuth2Token {
 	access_token: string;
@@ -12,10 +13,15 @@ interface OAuth2Token {
 	expires_in?: number;
 }
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET: RequestHandler = async ({ locals, request }) => {
 	const db = locals.db;
 	if (!db) {
 		throw error(500, 'Database not available');
+	}
+
+	// Verify cron secret
+	if (!isCronAuthorized(request)) {
+		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
 	// Check if setup is complete

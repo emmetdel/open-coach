@@ -1,4 +1,5 @@
 import type { Database, TrainingPlan } from "./db";
+import { getSetting, SETTING_KEYS } from "./db";
 
 export interface WeeklyAnalysis {
   weekNumber: number;
@@ -283,11 +284,8 @@ async function getActualRunsForWeek(
 }
 
 async function getAvailableDays(db: Database): Promise<string[]> {
-  const result = await db
-    .prepare("SELECT value FROM user_settings WHERE key = 'AVAILABLE_DAYS'")
-    .first<{ value: string }>();
-
-  return result ? JSON.parse(result.value) : ["Mon", "Wed", "Fri", "Sun"];
+  const value = await getSetting(db, SETTING_KEYS.AVAILABLE_DAYS);
+  return value ? JSON.parse(value) : ["Mon", "Wed", "Fri", "Sun"];
 }
 
 function getDayOfWeek(dateString: string): string {

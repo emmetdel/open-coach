@@ -12,6 +12,7 @@ import {
   setPlanMetadata,
   insertPlan,
   type Database,
+  SETTING_KEYS,
 } from "$lib/server/db";
 import { deleteAllOpenCoachWorkouts } from "$lib/server/garmin";
 import { generateGoalBasedPlan } from "$lib/server/goalBasedPlanner";
@@ -66,8 +67,11 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     await deleteFuturePlans(db);
 
     // Generate goal-based plan
-    const currentFitness = await getSetting(db, "CURRENT_FITNESS");
-    const availableDaysJson = await getSetting(db, "AVAILABLE_DAYS");
+    const currentFitness = await getSetting(db, SETTING_KEYS.CURRENT_FITNESS);
+    const availableDaysJson = await getSetting(
+      db,
+      SETTING_KEYS.AVAILABLE_DAYS,
+    );
 
     const plan = await generateGoalBasedPlan(db, {
       goalId: primaryGoal.id,

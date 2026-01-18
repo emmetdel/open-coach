@@ -5,6 +5,7 @@ import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { detectMissedRuns, checkConsistency } from "$lib/server/intelligence";
 import { sendPushNotification } from "$lib/server/notifications";
+import { isCronAuthorized } from "$lib/server/cronAuth";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   const db = locals.db;
@@ -13,10 +14,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   // Verify cron secret
-  const cronSecret = request.headers.get("x-cron-secret");
-  const expectedSecret = process.env.CRON_SECRET || "local-dev";
-
-  if (cronSecret !== expectedSecret) {
+  if (!isCronAuthorized(request)) {
     return json({ error: "Unauthorized" }, { status: 401 });
   }
 

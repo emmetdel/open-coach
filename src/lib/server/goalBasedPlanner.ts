@@ -261,13 +261,13 @@ function distributeVolumeAcrossDays(
     let description: string;
 
     if (isLongRun) {
-      type = "Long Run";
+      type = "Long";
       description = getLongRunDescription(phase, distance);
     } else if (index === 0) {
-      type = "Easy Run";
+      type = "Easy";
       description = "Easy recovery run - focus on form";
     } else {
-      type = phase === "peak" ? "Tempo Run" : "Easy Run";
+      type = phase === "peak" ? "Interval" : "Easy";
       description =
         phase === "peak"
           ? "Tempo run - moderate intensity"

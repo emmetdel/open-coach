@@ -161,7 +161,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           .prepare(
             `
 					UPDATE training_plan
-					SET type = 'Walk',
+					SET type = 'Easy',
 					    target_distance_km = NULL,
 					    target_duration_minutes = 20,
 					    description = 'Recovery walk - take it easy and enjoy being outside'
@@ -195,7 +195,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           .prepare(
             `
 					UPDATE training_plan
-					SET status = 'Skipped',
+					SET status = 'Missed',
 					    description = description || ' [Skipped for recovery]'
 					WHERE id = ?
 				`,
