@@ -46,6 +46,7 @@
         targetDate = data.settings?.targetDate || "";
         availableDays = data.settings?.availableDays || [];
         currentFitness = data.settings?.currentFitness || "";
+        planGenerationStrategy = data.settings?.planGenerationStrategy || "auto";
         
         // Check notification support
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -179,6 +180,7 @@
     let targetDate = $state("");
     let availableDays = $state<string[]>([]);
     let currentFitness = $state("");
+    let planGenerationStrategy = $state<"auto" | "goal_based" | "legacy">("auto");
     let savingTraining = $state(false);
     let trainingMessage = $state("");
 
@@ -266,15 +268,16 @@
         trainingMessage = "";
 
         try {
-            const res = await fetch("/api/settings", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    target_date: targetDate,
-                    available_days: availableDays,
-                    current_fitness: currentFitness,
-                }),
-            });
+                    const res = await fetch("/api/settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            target_date: targetDate,
+                            available_days: availableDays,
+                            current_fitness: currentFitness,
+                            plan_generation_strategy: planGenerationStrategy,
+                        }),
+                    });
 
             const result = await res.json();
             if (result.success) {
@@ -509,6 +512,24 @@
                         />
                         <p class="text-xs text-slate-500">
                             Help the AI understand your starting point
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="plan-strategy">Plan Generation</Label>
+                        <select
+                            id="plan-strategy"
+                            bind:value={planGenerationStrategy}
+                            class="w-full rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-white focus:border-accent-500 focus:outline-none focus:ring-1 focus:ring-accent-500"
+                        >
+                            <option value="auto">
+                                Auto (Goals if available)
+                            </option>
+                            <option value="goal_based">Goal-based only</option>
+                            <option value="legacy">Legacy only</option>
+                        </select>
+                        <p class="text-xs text-slate-500">
+                            Choose how new plans are generated
                         </p>
                     </div>
 

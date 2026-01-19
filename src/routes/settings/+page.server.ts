@@ -16,7 +16,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		availableDays,
 		currentFitness,
 		pushEnabled,
-		garminConnected
+		garminConnected,
+		planGenerationStrategy
 	] = await Promise.all([
 		getSetting(db, SETTING_KEYS.OPENROUTER_KEY),
 		getSetting(db, SETTING_KEYS.OPENROUTER_MODEL),
@@ -24,7 +25,8 @@ export const load: PageServerLoad = async ({ locals }) => {
 		getSetting(db, SETTING_KEYS.AVAILABLE_DAYS),
 		getSetting(db, SETTING_KEYS.CURRENT_FITNESS),
 		getSetting(db, SETTING_KEYS.PUSH_ENABLED),
-		hasValidTokens(db)
+		hasValidTokens(db),
+		getSetting(db, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
 	]);
 
 	// Parse available days
@@ -47,6 +49,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			targetDate: targetDate || '',
 			availableDays: daysArray,
 			currentFitness: currentFitness || '',
+			planGenerationStrategy: planGenerationStrategy || 'auto',
 			
 			// Notifications
 			pushEnabled: pushEnabled === 'true',
@@ -57,5 +60,4 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	};
 };
-
 

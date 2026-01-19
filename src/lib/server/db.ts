@@ -102,6 +102,8 @@ export const SETTING_KEYS = {
   VAPID_PRIVATE_KEY: "vapid_private_key",
   // Demo mode (bypasses Garmin)
   DEMO_MODE: "demo_mode",
+  // Plan generation
+  PLAN_GENERATION_STRATEGY: "plan_generation_strategy",
   // Garmin OAuth tokens (persisted for automatic refresh)
   GARMIN_OAUTH1_TOKEN: "garmin_oauth1_token",
   GARMIN_OAUTH2_TOKEN: "garmin_oauth2_token",
@@ -204,6 +206,18 @@ export async function setSettings(
       .bind(key, value),
   );
   await db.batch(statements);
+}
+
+// Get runs after a certain date
+export async function getRunsAfterDate(
+  db: Database,
+  fromDate: string,
+): Promise<Run[]> {
+  const result = await db
+    .prepare("SELECT * FROM runs WHERE date >= ? ORDER BY date ASC")
+    .bind(fromDate)
+    .all<Run>();
+  return result.results;
 }
 
 // Get recent runs

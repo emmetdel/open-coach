@@ -46,9 +46,10 @@ export async function generateGoalBasedPlan(
 ): Promise<PlanGenerationResult> {
   // 1. Calculate Training Timeline
   const today = new Date();
+  const planStart = getNextMonday(today);
   const goalDate = new Date(input.goalDate);
   const weeksAvailable = Math.floor(
-    (goalDate.getTime() - today.getTime()) / (7 * 24 * 60 * 60 * 1000),
+    (goalDate.getTime() - planStart.getTime()) / (7 * 24 * 60 * 60 * 1000),
   );
 
   const minWeeks = 8;
@@ -69,7 +70,7 @@ export async function generateGoalBasedPlan(
     (targetWeeklyVolume - currentCapacity.weeklyVolume) / totalWeeks;
 
   // Build-up should be max 10% per week (safe progression)
-  const safeProgression = currentCapacity.weeklyVolume * 0.1;
+  const safeProgression = Math.max(1, currentCapacity.weeklyVolume * 0.1);
   const weeklyIncrease = Math.min(volumeProgression, safeProgression);
 
   // 4. Structure Plan into Phases
@@ -89,24 +90,30 @@ export async function generateGoalBasedPlan(
   // 5. Generate Week-by-Week Plan
   const weekPlans: WeekPlan[] = [];
   let currentVolume = currentCapacity.weeklyVolume;
+  let currentLongRun = currentCapacity.longestDistance;
 
   for (let week = 1; week <= totalWeeks; week++) {
     const phase = determinePhase(week, phases);
     const targetVolume = calculateWeekVolume(
       week,
       currentCapacity,
+      currentVolume,
       weeklyIncrease,
       phase,
       phases,
     );
-    const weekStart = getWeekStartDate(today, week);
+    const weekStart = getWeekStartDate(planStart, week);
     const workouts = distributeVolumeAcrossDays(
       targetVolume,
+      currentLongRun,
       input.availableDays,
       phase,
       weekStart,
       week,
       input.goalId,
+    );
+    const weekLongRun = Math.max(
+      ...workouts.map((w) => (w.type === "Long" ? w.target_distance_km : 0)),
     );
 
     weekPlans.push({
@@ -124,6 +131,7 @@ export async function generateGoalBasedPlan(
     });
 
     currentVolume = targetVolume;
+    currentLongRun = Math.max(currentLongRun, weekLongRun || currentLongRun);
   }
 
   return {
@@ -182,12 +190,14 @@ function determinePhase(
 function calculateWeekVolume(
   week: number,
   currentCapacity: { weeklyVolume: number; longestDistance: number },
+  currentWeeklyVolume: number,
   weeklyIncrease: number,
   phase: "base_building" | "volume" | "peak" | "taper",
   phases: { base: number; volume: number; peak: number; taper: number },
 ): number {
   const volumePhaseEndWeek = phases.base + phases.volume;
-  const peakVolume = currentCapacity.weeklyVolume + (volumePhaseEndWeek - 1) * weeklyIncrease;
+  const peakVolume =
+    currentCapacity.weeklyVolume + (volumePhaseEndWeek - 1) * weeklyIncrease;
 
   let volume = 0;
 
@@ -201,14 +211,16 @@ function calculateWeekVolume(
       volume = peakVolume;
       break;
     case "taper": {
-      // Reduce volume by 20% each week relative to peak
+      // Reduce volume by 15% each week relative to peak
       const weeksIntoTaper = week - (phases.base + phases.volume + phases.peak);
-      volume = peakVolume * Math.pow(0.8, weeksIntoTaper);
+      volume = peakVolume * Math.pow(0.85, weeksIntoTaper);
       break;
     }
   }
 
-  return Math.max(volume, 10); // Minimum 10km per week
+  const maxIncrease = Math.max(1, currentWeeklyVolume * 0.1);
+  const capped = Math.min(volume, currentWeeklyVolume + maxIncrease);
+  return Math.max(capped, 10); // Minimum 10km per week
 }
 
 /**
@@ -216,6 +228,7 @@ function calculateWeekVolume(
  */
 function distributeVolumeAcrossDays(
   targetVolume: number,
+  lastLongRun: number,
   availableDays: string[],
   phase: "base_building" | "volume" | "peak" | "taper",
   weekStart: Date,
@@ -228,10 +241,18 @@ function distributeVolumeAcrossDays(
   if (daysPerWeek === 0) return workouts;
 
   // Calculate distances for each workout
-  // Long run should be ~40% of weekly volume
-  const longRunDistance = targetVolume * 0.4;
-  const remainingVolume = targetVolume - longRunDistance;
-  const easyRunDistance = daysPerWeek > 1 ? remainingVolume / (daysPerWeek - 1) : 0;
+  const longRunFraction =
+    daysPerWeek <= 2 ? 0.5 : daysPerWeek === 3 ? 0.4 : 0.35;
+  const maxLongRun = Math.max(lastLongRun * 1.1, lastLongRun + 0.5);
+  let longRunDistance = Math.min(targetVolume * longRunFraction, maxLongRun);
+  longRunDistance = Math.max(longRunDistance, Math.min(targetVolume, 2));
+  if (daysPerWeek === 1) {
+    longRunDistance = targetVolume;
+  }
+
+  const remainingVolume = Math.max(0, targetVolume - longRunDistance);
+  const easyRunDistance =
+    daysPerWeek > 1 ? remainingVolume / (daysPerWeek - 1) : 0;
 
   // Map day names to offsets from week start (Monday)
   const dayOffsets: Record<string, number> = {
@@ -242,18 +263,32 @@ function distributeVolumeAcrossDays(
     Fri: 4,
     Sat: 5,
     Sun: 6,
+    Monday: 0,
+    Tuesday: 1,
+    Wednesday: 2,
+    Thursday: 3,
+    Friday: 4,
+    Saturday: 5,
+    Sunday: 6,
   };
 
+  const normalizedDays = availableDays
+    .map((day) => normalizeDayName(day))
+    .filter((day): day is string => !!day);
+
   // Sort available days by their offset
-  const sortedDays = [...availableDays].sort(
+  const sortedDays = [...normalizedDays].sort(
     (a, b) => dayOffsets[a] - dayOffsets[b],
   );
 
   // Last day is long run day
   const longRunDay = sortedDays[sortedDays.length - 1];
+  const intervalDay =
+    phase === "peak" && daysPerWeek >= 3 ? sortedDays[1] : null;
 
   sortedDays.forEach((day, index) => {
     const isLongRun = day === longRunDay;
+    const isIntervalDay = intervalDay === day;
     const distance = isLongRun ? longRunDistance : easyRunDistance;
     const duration = Math.round(distance * 6); // ~6 min/km pace
 
@@ -263,19 +298,23 @@ function distributeVolumeAcrossDays(
     if (isLongRun) {
       type = "Long";
       description = getLongRunDescription(phase, distance);
+    } else if (isIntervalDay) {
+      type = "Interval";
+      description = "Interval session - controlled effort with full recoveries";
     } else if (index === 0) {
       type = "Easy";
       description = "Easy recovery run - focus on form";
     } else {
-      type = phase === "peak" ? "Interval" : "Easy";
-      description =
-        phase === "peak"
-          ? "Tempo run - moderate intensity"
-          : "Easy run - conversational pace";
+      type = "Easy";
+      description = "Easy run - conversational pace";
     }
 
     const scheduledDate = new Date(weekStart);
-    scheduledDate.setDate(scheduledDate.getDate() + dayOffsets[day]);
+    const dayOffset = dayOffsets[day];
+    if (dayOffset === undefined) {
+      return;
+    }
+    scheduledDate.setDate(scheduledDate.getDate() + dayOffset);
 
     workouts.push({
       id: crypto.randomUUID(),
@@ -349,4 +388,28 @@ function getWeekStartDate(startDate: Date, weekNumber: number): Date {
   const diff = day === 0 ? 6 : day - 1; // Days since Monday (0-6)
   weekStart.setDate(weekStart.getDate() - diff + (weekNumber - 1) * 7);
   return weekStart;
+}
+
+function getNextMonday(date: Date): Date {
+  const day = date.getDay();
+  const daysUntilMonday = day === 0 ? 1 : (8 - day) % 7 || 7;
+  const nextMonday = new Date(date);
+  nextMonday.setDate(date.getDate() + daysUntilMonday);
+  nextMonday.setHours(0, 0, 0, 0);
+  return nextMonday;
+}
+
+function normalizeDayName(day: string): string | null {
+  const trimmed = day.trim();
+  const short = trimmed.slice(0, 3);
+  const upperShort = short[0]?.toUpperCase() + short.slice(1).toLowerCase();
+  const valid = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  if (valid.includes(upperShort)) {
+    return upperShort;
+  }
+  const full = trimmed[0]?.toUpperCase() + trimmed.slice(1).toLowerCase();
+  if (["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"].includes(full)) {
+    return full;
+  }
+  return null;
 }

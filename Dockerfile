@@ -38,6 +38,10 @@ ENV HOST=0.0.0.0
 # Expose port
 EXPOSE 3000
 
+# Container healthcheck
+HEALTHCHECK --interval=30s --timeout=10s --retries=3 --start-period=10s \
+  CMD bun -e "fetch('http://localhost:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
 # Define volume for data persistence
 VOLUME ["/app/data"]
 

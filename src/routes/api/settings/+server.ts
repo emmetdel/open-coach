@@ -15,6 +15,7 @@ export interface SettingsPayload {
 	email_enabled?: boolean;
 	notify_on_sync?: boolean;
 	notify_on_missed?: boolean;
+	plan_generation_strategy?: 'auto' | 'goal_based' | 'legacy';
 	skip_validation?: boolean; // Skip external API validation (for testing/dev)
 }
 
@@ -31,6 +32,7 @@ export interface SettingsResponse {
 	email_enabled: boolean;
 	notify_on_sync: boolean;
 	notify_on_missed: boolean;
+	plan_generation_strategy: 'auto' | 'goal_based' | 'legacy' | null;
 	is_complete: boolean;
 	available_models: typeof AVAILABLE_MODELS;
 }
@@ -54,7 +56,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		pushEnabled,
 		emailEnabled,
 		notifyOnSync,
-		notifyOnMissed
+		notifyOnMissed,
+		planGenerationStrategy
 	] = await Promise.all([
 		getSetting(db, SETTING_KEYS.GARMIN_EMAIL),
 		getSetting(db, SETTING_KEYS.GARMIN_PASSWORD),
@@ -67,7 +70,8 @@ export const GET: RequestHandler = async ({ locals }) => {
 		getSetting(db, SETTING_KEYS.PUSH_ENABLED),
 		getSetting(db, SETTING_KEYS.EMAIL_ENABLED),
 		getSetting(db, SETTING_KEYS.NOTIFY_ON_SYNC),
-		getSetting(db, SETTING_KEYS.NOTIFY_ON_MISSED)
+		getSetting(db, SETTING_KEYS.NOTIFY_ON_MISSED),
+		getSetting(db, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
 	]);
 
 	const isComplete = await hasCompletedSetup(db);
@@ -85,6 +89,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		email_enabled: emailEnabled === 'true',
 		notify_on_sync: notifyOnSync === 'true',
 		notify_on_missed: notifyOnMissed === 'true',
+		plan_generation_strategy: (planGenerationStrategy as SettingsResponse['plan_generation_strategy']) ?? null,
 		is_complete: isComplete,
 		available_models: AVAILABLE_MODELS
 	} satisfies SettingsResponse);
@@ -124,7 +129,8 @@ export const DELETE: RequestHandler = async ({ url, locals }) => {
 			SETTING_KEYS.OPENROUTER_MODEL,
 			SETTING_KEYS.NOTIFICATION_EMAIL,
 			SETTING_KEYS.EMAIL_ENABLED,
-			SETTING_KEYS.PUSH_ENABLED
+			SETTING_KEYS.PUSH_ENABLED,
+			SETTING_KEYS.PLAN_GENERATION_STRATEGY
 		);
 	}
 
@@ -205,6 +211,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	if (payload.notify_on_missed !== undefined) {
 		settingsToSave[SETTING_KEYS.NOTIFY_ON_MISSED] = payload.notify_on_missed ? 'true' : 'false';
+	}
+	if (payload.plan_generation_strategy) {
+		settingsToSave[SETTING_KEYS.PLAN_GENERATION_STRATEGY] = payload.plan_generation_strategy;
 	}
 
 	// Return validation errors if any

@@ -1,5 +1,5 @@
 import type { PageServerLoad } from './$types';
-import { getActiveGoals } from '$lib/server/db';
+import { getActiveGoals, getRunsAfterDate, getPlanMetadata } from '$lib/server/db';
 
 export const load: PageServerLoad = async ({ locals }) => {
   const db = locals.db;
@@ -13,7 +13,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     // For each goal, calculate progress
     const goalsWithProgress = await Promise.all(
       goals.map(async (goal) => {
-        const progress = await calculateGoalProgress(db, goal.id);
+        const progress = await calculateGoalProgress(db, goal);
         return { ...goal, progress };
       })
     );
@@ -26,11 +26,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 };
 
 /**
- * Calculate goal progress based on completed workouts
+ * Calculate goal progress based on actual runs vs target
  */
 async function calculateGoalProgress(
   db: any,
-  goalId: string
+  goal: any // TrainingGoal
 ): Promise<{
   percentComplete: number;
   weeksCompleted: number;
@@ -40,57 +40,65 @@ async function calculateGoalProgress(
   longestRun: number;
   status: 'on_track' | 'behind' | 'ahead';
 }> {
-  // Get all workouts for this goal
-  const result = await db.prepare(
+  // 1. Determine Goal Timeline
+  const startDate = goal.created_at;
+  const targetDate = goal.target_date;
+  
+  // Calculate total duration in weeks
+  const start = new Date(startDate);
+  const target = new Date(targetDate);
+  const totalWeeks = Math.max(1, Math.ceil((target.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)));
+
+  // Calculate weeks completed so far
+  const now = new Date();
+  const weeksCompleted = Math.max(0, Math.min(totalWeeks, Math.floor((now.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000))));
+
+  // 2. Get Actual Progress (Any run since goal creation)
+  const runs = await getRunsAfterDate(db, startDate.split(' ')[0]); // Ensure YYYY-MM-DD format if needed, but typically standard SQL string comparison works
+  
+  const runsCompleted = runs.length;
+  const longestRun = runs.length > 0 
+    ? Math.max(...runs.map((r: any) => r.distance_meters / 1000))
+    : 0;
+
+  // 3. Get Planned Progress (If plans exist)
+  const plansResult = await db.prepare(
     `SELECT * FROM training_plan WHERE goal_id = ? ORDER BY scheduled_date`
-  ).bind(goalId).all();
+  ).bind(goal.id).all();
+  const plannedWorkouts = plansResult.results || [];
+  
+  // Total runs expected is either the number of planned workouts OR estimation based on runs/week target
+  // If we have plans, use them. If not, estimate 3 runs/week
+  const totalRuns = plannedWorkouts.length > 0 
+    ? plannedWorkouts.length 
+    : totalWeeks * 3;
 
-  const workouts = result.results || [];
+  // 4. Calculate Percentage
+  // If we have plans, use completed/total runs. 
+  // If no plans, use time elapsed ? No, that's misleading.
+  // Better: Use runs completed vs expected total runs
+  const percentComplete = totalRuns > 0
+    ? Math.min(100, Math.round((runsCompleted / totalRuns) * 100))
+    : 0;
 
-  if (workouts.length === 0) {
-    return {
-      percentComplete: 0,
-      weeksCompleted: 0,
-      totalWeeks: 0,
-      runsCompleted: 0,
-      totalRuns: 0,
-      longestRun: 0,
-      status: 'on_track'
-    };
+  // 5. Determine Status
+  let status: 'on_track' | 'behind' | 'ahead' = 'on_track';
+  
+  // Expected runs by now
+  let expectedRunsByType: number;
+  
+  if (plannedWorkouts.length > 0) {
+     const today = new Date().toISOString().split('T')[0];
+     // Count planned workouts up to today
+     expectedRunsByType = plannedWorkouts.filter((w: any) => w.scheduled_date <= today).length;
+  } else {
+     // Estimate based on time elapsed (e.g. 3 runs per week)
+     expectedRunsByType = weeksCompleted * 3;
   }
 
-  const totalWeeks = Math.max(...workouts.map((w: any) => w.week_number));
-  const today = new Date().toISOString().split('T')[0];
-
-  // Count completed workouts
-  const completedWorkouts = workouts.filter((w: any) => w.status === 'Completed');
-  const runsCompleted = completedWorkouts.length;
-  const totalRuns = workouts.length;
-
-  // Calculate weeks completed (based on past dates)
-  const pastWorkouts = workouts.filter((w: any) => w.scheduled_date <= today);
-  const weeksCompleted = pastWorkouts.length > 0
-    ? Math.max(...pastWorkouts.map((w: any) => w.week_number))
-    : 0;
-
-  // Find longest completed run
-  const longestRun = completedWorkouts.length > 0
-    ? Math.max(...completedWorkouts.map((w: any) => w.target_distance_km))
-    : 0;
-
-  // Calculate progress percentage
-  const percentComplete = totalRuns > 0
-    ? Math.round((runsCompleted / totalRuns) * 100)
-    : 0;
-
-  // Determine status
-  let status: 'on_track' | 'behind' | 'ahead' = 'on_track';
-
-  // Expected runs completed by now
-  const expectedRuns = pastWorkouts.length;
-  if (runsCompleted < expectedRuns - 1) {
+  if (runsCompleted < expectedRunsByType - 1) {
     status = 'behind';
-  } else if (runsCompleted > expectedRuns) {
+  } else if (runsCompleted > expectedRunsByType + 2) {
     status = 'ahead';
   }
 

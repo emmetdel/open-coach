@@ -35,17 +35,43 @@ export const POST: RequestHandler = async ({ locals, request }) => {
   }
 
   try {
+    const body = (await request.json().catch(() => ({}))) as {
+      goalId?: string;
+      plan_generation_strategy?: "auto" | "goal_based" | "legacy";
+    };
+
+    const configuredStrategy = (await getSetting(
+      db,
+      SETTING_KEYS.PLAN_GENERATION_STRATEGY,
+    )) as "auto" | "goal_based" | "legacy" | null;
+    const strategy =
+      body.plan_generation_strategy || configuredStrategy || "auto";
+
     // Get active goals
     const goals = await getActiveGoals(db);
 
-    // If no goals, use legacy generation
-    if (goals.length === 0) {
+    if (strategy === "legacy") {
+      return await generateLegacyPlan(db);
+    }
+
+    if (strategy === "goal_based" && goals.length === 0) {
+      return json({
+        success: false,
+        weeksGenerated: 0,
+        message:
+          "Goal-based plan requested but no goals exist. Create a goal first or switch to legacy.",
+      });
+    }
+
+    // Auto strategy falls back to legacy if no goals
+    if (strategy === "auto" && goals.length === 0) {
       return await generateLegacyPlan(db);
     }
 
     // Use goal-based generation
-    const { goalId } = await request.json();
-    const primaryGoal = goalId ? await getGoalById(db, goalId) : goals[0];
+    const primaryGoal = body.goalId
+      ? await getGoalById(db, body.goalId)
+      : goals[0];
 
     if (!primaryGoal) {
       return json({
