@@ -16,12 +16,13 @@ interface RescheduleRequest {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
   const db = locals.db as LocalDatabase;
-  if (!db) {
+  if (!db || !locals.user) {
     return json(
       { success: false, error: "Database not available" },
       { status: 500 },
     );
   }
+  const userId = locals.user.id;
 
   try {
     const body: RescheduleRequest = await request.json();
@@ -36,8 +37,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // Get the current plan
     const plan = await db
-      .prepare("SELECT * FROM training_plan WHERE id = ?")
-      .bind(planId)
+      .prepare("SELECT * FROM training_plan WHERE user_id = ? AND id = ?")
+      .bind(userId, planId)
       .first<{
         id: string;
         scheduled_date: string;
@@ -64,39 +65,43 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         // Check if there's already a run tomorrow
         const tomorrowPlan = await db
           .prepare(
-            "SELECT id FROM training_plan WHERE scheduled_date = ? AND status = ?",
+            "SELECT id FROM training_plan WHERE user_id = ? AND scheduled_date = ? AND status = ?",
           )
-          .bind(tomorrowStr, "Pending")
+          .bind(userId, tomorrowStr, "Pending")
           .first<{ id: string }>();
 
         if (tomorrowPlan) {
           // Swap: move tomorrow's run to today
           await db
-            .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-            .bind(today, tomorrowPlan.id)
+            .prepare(
+              "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+            )
+            .bind(today, userId, tomorrowPlan.id)
             .run();
         }
 
         // Move today's run to tomorrow
         await db
-          .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-          .bind(tomorrowStr, planId)
+          .prepare(
+            "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+          )
+          .bind(tomorrowStr, userId, planId)
           .run();
 
         // Update Garmin if needed (delete and recreate)
         if (plan.garmin_workout_id) {
           const { deleteGarminWorkout, pushWeekToGarmin } =
             await import("$lib/server/garmin");
-          await deleteGarminWorkout(db, plan.garmin_workout_id);
+          await deleteGarminWorkout(db, userId, plan.garmin_workout_id);
           await db
             .prepare(
-              "UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?",
+              "UPDATE training_plan SET garmin_workout_id = NULL WHERE user_id = ? AND id = ?",
             )
-            .bind(planId)
+            .bind(userId, planId)
             .run();
 
           // Re-sync workouts for the next 7 days
-          await pushWeekToGarmin(db);
+          await pushWeekToGarmin(db, userId);
         }
 
         return json({
@@ -113,11 +118,11 @@ export const POST: RequestHandler = async ({ request, locals }) => {
           .prepare(
             `
 						SELECT id, scheduled_date FROM training_plan
-						WHERE scheduled_date > ? AND status = ?
+						WHERE user_id = ? AND scheduled_date > ? AND status = ?
 						ORDER BY scheduled_date ASC LIMIT 1
 					`,
           )
-          .bind(today, "Pending")
+          .bind(userId, today, "Pending")
           .first<{ id: string; scheduled_date: string }>();
 
         if (!nextPlan) {
@@ -129,18 +134,22 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
         // Swap the dates
         await db
-          .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-          .bind(nextPlan.scheduled_date, planId)
+          .prepare(
+            "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+          )
+          .bind(nextPlan.scheduled_date, userId, planId)
           .run();
         await db
-          .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-          .bind(today, nextPlan.id)
+          .prepare(
+            "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+          )
+          .bind(today, userId, nextPlan.id)
           .run();
 
         // Re-sync Garmin workouts
         if (plan.garmin_workout_id) {
           const { pushWeekToGarmin } = await import("$lib/server/garmin");
-          await pushWeekToGarmin(db);
+          await pushWeekToGarmin(db, userId);
         }
 
         const swapDate = new Date(
@@ -165,21 +174,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					    target_distance_km = NULL,
 					    target_duration_minutes = 20,
 					    description = 'Recovery walk - take it easy and enjoy being outside'
-					WHERE id = ?
+					WHERE user_id = ? AND id = ?
 				`,
           )
-          .bind(planId)
+          .bind(userId, planId)
           .run();
 
         // Delete the Garmin workout if exists (walks don't need structured workouts)
         if (plan.garmin_workout_id) {
           const { deleteGarminWorkout } = await import("$lib/server/garmin");
-          await deleteGarminWorkout(db, plan.garmin_workout_id);
+          await deleteGarminWorkout(db, userId, plan.garmin_workout_id);
           await db
             .prepare(
-              "UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?",
+              "UPDATE training_plan SET garmin_workout_id = NULL WHERE user_id = ? AND id = ?",
             )
-            .bind(planId)
+            .bind(userId, planId)
             .run();
         }
 
@@ -197,21 +206,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 					UPDATE training_plan
 					SET status = 'Missed',
 					    description = description || ' [Skipped for recovery]'
-					WHERE id = ?
+					WHERE user_id = ? AND id = ?
 				`,
           )
-          .bind(planId)
+          .bind(userId, planId)
           .run();
 
         // Delete the Garmin workout
         if (plan.garmin_workout_id) {
           const { deleteGarminWorkout } = await import("$lib/server/garmin");
-          await deleteGarminWorkout(db, plan.garmin_workout_id);
+          await deleteGarminWorkout(db, userId, plan.garmin_workout_id);
           await db
             .prepare(
-              "UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?",
+              "UPDATE training_plan SET garmin_workout_id = NULL WHERE user_id = ? AND id = ?",
             )
-            .bind(planId)
+            .bind(userId, planId)
             .run();
         }
 
@@ -227,13 +236,15 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
         // Update the scheduled date to today
         await db
-          .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-          .bind(today, planId)
+          .prepare(
+            "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+          )
+          .bind(today, userId, planId)
           .run();
 
         // Sync to Garmin watch
         const { pushWeekToGarmin } = await import("$lib/server/garmin");
-        await pushWeekToGarmin(db);
+        await pushWeekToGarmin(db, userId);
 
         return json({
           success: true,
@@ -265,27 +276,31 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         // Check if there's already a run on the new date
         const existingPlan = await db
           .prepare(
-            "SELECT id, type FROM training_plan WHERE scheduled_date = ? AND status = ?",
+            "SELECT id, type FROM training_plan WHERE user_id = ? AND scheduled_date = ? AND status = ?",
           )
-          .bind(newDate, "Pending")
+          .bind(userId, newDate, "Pending")
           .first<{ id: string; type: string }>();
 
         if (existingPlan) {
           // Swap the dates
           await db
-            .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-            .bind(plan.scheduled_date, existingPlan.id)
+            .prepare(
+              "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+            )
+            .bind(plan.scheduled_date, userId, existingPlan.id)
             .run();
 
           await db
-            .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-            .bind(newDate, planId)
+            .prepare(
+              "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+            )
+            .bind(newDate, userId, planId)
             .run();
 
           // Re-sync Garmin workouts
           if (plan.garmin_workout_id || existingPlan) {
             const { pushWeekToGarmin } = await import("$lib/server/garmin");
-            await pushWeekToGarmin(db);
+            await pushWeekToGarmin(db, userId);
           }
 
           const oldDate = new Date(
@@ -310,24 +325,26 @@ export const POST: RequestHandler = async ({ request, locals }) => {
         } else {
           // Just move the run to the new date
           await db
-            .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-            .bind(newDate, planId)
+            .prepare(
+              "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+            )
+            .bind(newDate, userId, planId)
             .run();
 
           // Update Garmin if needed
           if (plan.garmin_workout_id) {
             const { deleteGarminWorkout, pushWeekToGarmin } =
               await import("$lib/server/garmin");
-            await deleteGarminWorkout(db, plan.garmin_workout_id);
+            await deleteGarminWorkout(db, userId, plan.garmin_workout_id);
             await db
               .prepare(
-                "UPDATE training_plan SET garmin_workout_id = NULL WHERE id = ?",
+                "UPDATE training_plan SET garmin_workout_id = NULL WHERE user_id = ? AND id = ?",
               )
-              .bind(planId)
+              .bind(userId, planId)
               .run();
 
             // Re-sync workouts
-            await pushWeekToGarmin(db);
+            await pushWeekToGarmin(db, userId);
           }
 
           const newDateFormatted = new Date(

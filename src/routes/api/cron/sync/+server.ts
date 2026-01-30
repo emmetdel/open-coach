@@ -9,7 +9,8 @@ import {
 	getExistingActivityIds,
 	insertRun,
 	updateRunFeedback,
-	hasCompletedSetup
+	hasCompletedSetup,
+	listUsers
 } from '$lib/server/db';
 import { isCronAuthorized } from '$lib/server/cronAuth';
 
@@ -25,57 +26,43 @@ export const GET: RequestHandler = async ({ locals, request }) => {
 	}
 
 	// Check if setup is complete
-	const isSetup = await hasCompletedSetup(db);
-	if (!isSetup) {
-		return json({
-			success: false,
-			message: 'Setup not complete, skipping sync'
-		});
-	}
-
 	try {
-		// Fetch recent runs from Garmin
-		const recentRuns = await fetchRecentRuns(db, 5);
+		const users = await listUsers(db);
+		let totalNewRuns = 0;
 
-		// Get existing activity IDs to avoid duplicates
-		const existingIds = await getExistingActivityIds(db);
-
-		// Filter to only new runs
-		const newRuns = recentRuns.filter(
-			(run) => !existingIds.has(run.garmin_activity_id)
-		);
-
-		if (newRuns.length === 0) {
-			return json({
-				success: true,
-				newRuns: 0,
-				message: 'No new runs found'
-			});
-		}
-
-		// Sync each new run
-		for (const run of newRuns) {
-			// Insert the run
-			await insertRun(db, {
-				...run,
-				ai_feedback: null
-			});
-
-			// Get AI feedback (non-blocking for cron)
-			try {
-				const feedback = await analyzeRun(db, run);
-				await updateRunFeedback(db, run.garmin_activity_id, feedback);
-			} catch (err) {
-				console.error('Failed to get AI feedback:', err);
+		for (const user of users) {
+			const isSetup = await hasCompletedSetup(db, user.id);
+			if (!isSetup) {
+				continue;
 			}
-		}
 
-		console.log(`Cron sync: added ${newRuns.length} new runs`);
+			const recentRuns = await fetchRecentRuns(db, user.id, 5);
+			const existingIds = await getExistingActivityIds(db, user.id);
+			const newRuns = recentRuns.filter(
+				(run) => !existingIds.has(run.garmin_activity_id)
+			);
+
+			for (const run of newRuns) {
+				await insertRun(db, user.id, {
+					...run,
+					ai_feedback: null
+				});
+
+				try {
+					const feedback = await analyzeRun(db, user.id, run);
+					await updateRunFeedback(db, user.id, run.garmin_activity_id, feedback);
+				} catch (err) {
+					console.error('Failed to get AI feedback:', err);
+				}
+			}
+
+			totalNewRuns += newRuns.length;
+		}
 
 		return json({
 			success: true,
-			newRuns: newRuns.length,
-			message: `Synced ${newRuns.length} run(s)`
+			newRuns: totalNewRuns,
+			message: totalNewRuns > 0 ? `Synced ${totalNewRuns} run(s)` : 'No new runs found'
 		});
 	} catch (err) {
 		console.error('Cron sync failed:', err);

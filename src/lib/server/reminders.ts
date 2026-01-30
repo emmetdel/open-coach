@@ -7,10 +7,11 @@ type Database = LocalDatabase;
 // Check for runs scheduled tomorrow and send reminders
 export async function sendRunReminders(
 	db: Database,
+	userId: string,
 	type: 'evening' | 'morning'
 ): Promise<{ sent: number }> {
 	// Get notification preferences
-	const settings = await getSettings(db, [
+	const settings = await getSettings(db, userId, [
 		SETTING_KEYS.PUSH_ENABLED,
 		SETTING_KEYS.EMAIL_ENABLED,
 		SETTING_KEYS.NOTIFICATION_EMAIL
@@ -33,7 +34,7 @@ export async function sendRunReminders(
 	const today = new Date().toISOString().split('T')[0];
 
 	// Get upcoming plans
-	const plans = await getUpcomingPlans(db, 7);
+	const plans = await getUpcomingPlans(db, userId, 7);
 	const targetDate = type === 'evening' ? tomorrowStr : today;
 	const runsForDate = plans.filter((p) => p.scheduled_date === targetDate);
 
@@ -53,8 +54,8 @@ export async function sendRunReminders(
 
 		if (pushEnabled) {
 			try {
-				await sendPushNotification(db, { title, body });
-				sent++;
+				const result = await sendPushNotification(db, userId, { title, body });
+				sent += result.sent;
 			} catch (e) {
 				console.error('Push notification failed:', e);
 			}
@@ -62,8 +63,10 @@ export async function sendRunReminders(
 
 		if (emailEnabled && notificationEmail) {
 			try {
-				await sendEmailNotification(db, notificationEmail, title, body);
-				sent++;
+				const emailSent = await sendEmailNotification(db, userId, notificationEmail, title, body);
+				if (emailSent) {
+					sent++;
+				}
 			} catch (e) {
 				console.error('Email notification failed:', e);
 			}
@@ -139,7 +142,10 @@ export function getBeginnerTips(type: TrainingPlan['type']): string[] {
 }
 
 // Calculate current streak
-export async function calculateStreak(db: Database): Promise<{
+export async function calculateStreak(
+	db: Database,
+	userId: string
+): Promise<{
 	currentStreak: number;
 	longestStreak: number;
 	lastRunDate: string | null;
@@ -148,8 +154,10 @@ export async function calculateStreak(db: Database): Promise<{
 	const result = await db
 		.prepare(
 			`SELECT date FROM runs 
+			 WHERE user_id = ?
 			 ORDER BY date DESC`
 		)
+		.bind(userId)
 		.all<{ date: string }>();
 
 	const runs = result.results;
@@ -162,9 +170,10 @@ export async function calculateStreak(db: Database): Promise<{
 	const planResult = await db
 		.prepare(
 			`SELECT scheduled_date, status FROM training_plan 
-			 WHERE scheduled_date <= date('now')
+			 WHERE user_id = ? AND scheduled_date <= date('now')
 			 ORDER BY scheduled_date DESC`
 		)
+		.bind(userId)
 		.all<{ scheduled_date: string; status: string }>();
 
 	const plans = planResult.results;
@@ -195,7 +204,10 @@ export async function calculateStreak(db: Database): Promise<{
 }
 
 // Get progress stats for visualization
-export async function getProgressStats(db: Database): Promise<{
+export async function getProgressStats(
+	db: Database,
+	userId: string
+): Promise<{
 	firstRun: { date: string; distance: number; duration: number } | null;
 	latestRun: { date: string; distance: number; duration: number } | null;
 	totalRuns: number;
@@ -206,11 +218,13 @@ export async function getProgressStats(db: Database): Promise<{
 }> {
 	// Get first and latest runs
 	const firstRunResult = await db
-		.prepare('SELECT * FROM runs ORDER BY date ASC LIMIT 1')
+		.prepare('SELECT * FROM runs WHERE user_id = ? ORDER BY date ASC LIMIT 1')
+		.bind(userId)
 		.first<{ date: string; distance_meters: number; duration_seconds: number }>();
 
 	const latestRunResult = await db
-		.prepare('SELECT * FROM runs ORDER BY date DESC LIMIT 1')
+		.prepare('SELECT * FROM runs WHERE user_id = ? ORDER BY date DESC LIMIT 1')
+		.bind(userId)
 		.first<{ date: string; distance_meters: number; duration_seconds: number }>();
 
 	// Get totals
@@ -220,8 +234,10 @@ export async function getProgressStats(db: Database): Promise<{
 				COUNT(*) as total_runs,
 				SUM(distance_meters) as total_distance,
 				SUM(duration_seconds) as total_duration
-			 FROM runs`
+			 FROM runs
+			 WHERE user_id = ?`
 		)
+		.bind(userId)
 		.first<{ total_runs: number; total_distance: number; total_duration: number }>();
 
 	// Get weekly progress for last 8 weeks
@@ -232,10 +248,11 @@ export async function getProgressStats(db: Database): Promise<{
 				SUM(distance_meters) as distance,
 				COUNT(*) as runs
 			 FROM runs
-			 WHERE date >= date('now', '-8 weeks')
+			 WHERE user_id = ? AND date >= date('now', '-8 weeks')
 			 GROUP BY week
 			 ORDER BY week ASC`
 		)
+		.bind(userId)
 		.all<{ week: string; distance: number; runs: number }>();
 
 	// Calculate pace improvement
@@ -320,4 +337,3 @@ export function generateCelebration(
 
 	return celebrations.join('\n\n');
 }
-

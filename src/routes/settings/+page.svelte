@@ -188,6 +188,19 @@
     let regenerating = $state(false);
     let regenerateMessage = $state("");
 
+    // Account
+    let signingOut = $state(false);
+
+    async function signOut() {
+        signingOut = true;
+        try {
+            await fetch("/api/auth/logout", { method: "POST" });
+            window.location.href = "/login";
+        } catch (err) {
+            signingOut = false;
+        }
+    }
+
     const allDays = [
         "Monday",
         "Tuesday",
@@ -372,6 +385,40 @@
         </div>
 
         <div class="space-y-6">
+            <!-- Account -->
+            <Card class="border-slate-800/50 bg-slate-850">
+                <CardHeader>
+                    <div class="flex items-center gap-3">
+                        <div
+                            class="flex h-10 w-10 items-center justify-center rounded-lg bg-forest-500/20"
+                        >
+                            <Activity class="h-5 w-5 text-forest-300" />
+                        </div>
+                        <div>
+                            <CardTitle>Account</CardTitle>
+                            <CardDescription>
+                                Manage who trains with OpenCoach
+                            </CardDescription>
+                        </div>
+                    </div>
+                </CardHeader>
+                <CardContent class="flex flex-wrap gap-3">
+                    <a href="/signup">
+                        <Button variant="outline" size="sm">
+                            Add another runner
+                        </Button>
+                    </a>
+                    <Button
+                        variant="ghost"
+                        size="sm"
+                        onclick={signOut}
+                        disabled={signingOut}
+                    >
+                        {signingOut ? "Signing out..." : "Sign out"}
+                    </Button>
+                </CardContent>
+            </Card>
+
             <!-- AI Settings -->
             <Card class="border-slate-800/50 bg-slate-850">
                 <CardHeader>

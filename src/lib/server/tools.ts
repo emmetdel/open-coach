@@ -224,6 +224,7 @@ export const PLAN_TOOLS: ToolDefinition[] = [
 // Execute the tools
 export async function executePlanTool(
   db: LocalDatabase,
+  userId: string,
   toolName: string,
   args: any,
   messageId: string | null = null,
@@ -235,29 +236,29 @@ export async function executePlanTool(
     let result = { success: false, message: "Unknown error" };
 
     if (toolName === "update_workout") {
-      result = await toolUpdateWorkout(db, args);
+      result = await toolUpdateWorkout(db, userId, args);
     } else if (toolName === "add_workout") {
-      result = await toolAddWorkout(db, args);
+      result = await toolAddWorkout(db, userId, args);
     } else if (toolName === "regenerate_week") {
-      result = await toolRegenerateWeek(db);
+      result = await toolRegenerateWeek(db, userId);
     } else if (toolName === "sync_garmin_runs") {
-      result = await toolSyncGarminRuns(db, args);
+      result = await toolSyncGarminRuns(db, userId, args);
     } else if (toolName === "toggle_workout_status") {
-      result = await toolToggleWorkoutStatus(db, args);
+      result = await toolToggleWorkoutStatus(db, userId, args);
     } else if (toolName === "move_workout_to_today") {
-      result = await toolMoveWorkoutToToday(db, args);
+      result = await toolMoveWorkoutToToday(db, userId, args);
     } else if (toolName === "delete_workout") {
-      result = await toolDeleteWorkout(db, args);
+      result = await toolDeleteWorkout(db, userId, args);
     } else if (toolName === "push_to_garmin_watch") {
-      result = await toolPushToGarminWatch(db, args);
+      result = await toolPushToGarminWatch(db, userId, args);
     } else if (toolName === "get_upcoming_workouts") {
-      result = await toolGetUpcomingWorkouts(db, args);
+      result = await toolGetUpcomingWorkouts(db, userId, args);
     } else {
       return { success: false, message: `Unknown tool: ${toolName}` };
     }
 
     // Log the successful action
-    await insertCoachAction(db, {
+    await insertCoachAction(db, userId, {
       id: actionId,
       action_type: toolName,
       description: result.message,
@@ -270,7 +271,7 @@ export async function executePlanTool(
     return result;
   } catch (error: any) {
     // Log the failed action
-    await insertCoachAction(db, {
+    await insertCoachAction(db, userId, {
       id: actionId,
       action_type: toolName,
       description: error.message || "Error executing tool",
@@ -290,6 +291,7 @@ export async function executePlanTool(
 // Tool Implementation: Update Workout
 async function toolUpdateWorkout(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const { date, new_date, type, distance_km, reason } = args;
@@ -299,9 +301,9 @@ async function toolUpdateWorkout(
   // Let's use a targeted query to be safe.
   const plans = await db
     .prepare(
-      "SELECT * FROM training_plan WHERE scheduled_date = ? AND status = 'Pending'",
+      "SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date = ? AND status = 'Pending'",
     )
-    .bind(date)
+    .bind(userId, date)
     .all<TrainingPlan>();
 
   if (plans.results.length === 0) {
@@ -313,9 +315,11 @@ async function toolUpdateWorkout(
   // If moving date
   if (new_date && new_date !== date) {
     // Check if there's already a workout on the new date
-    const conflict = await db
-      .prepare("SELECT * FROM training_plan WHERE scheduled_date = ?")
-      .bind(new_date)
+  const conflict = await db
+      .prepare(
+        "SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date = ?",
+      )
+      .bind(userId, new_date)
       .first();
     if (conflict) {
       return {
@@ -325,23 +329,27 @@ async function toolUpdateWorkout(
     }
 
     await db
-      .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-      .bind(new_date, plan.id)
+      .prepare(
+        "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+      )
+      .bind(new_date, userId, plan.id)
       .run();
   }
 
   // If changing details
   if (type) {
     await db
-      .prepare("UPDATE training_plan SET type = ? WHERE id = ?")
-      .bind(type, plan.id)
+      .prepare("UPDATE training_plan SET type = ? WHERE user_id = ? AND id = ?")
+      .bind(type, userId, plan.id)
       .run();
   }
 
   if (distance_km) {
     await db
-      .prepare("UPDATE training_plan SET target_distance_km = ? WHERE id = ?")
-      .bind(distance_km, plan.id)
+      .prepare(
+        "UPDATE training_plan SET target_distance_km = ? WHERE user_id = ? AND id = ?",
+      )
+      .bind(distance_km, userId, plan.id)
       .run();
   }
 
@@ -351,15 +359,17 @@ async function toolUpdateWorkout(
     const newDist = distance_km || plan.target_distance_km;
     const newDesc = `${newType} run: ${newDist}km (Modified by Coach)`;
     await db
-      .prepare("UPDATE training_plan SET description = ? WHERE id = ?")
-      .bind(newDesc, plan.id)
+      .prepare(
+        "UPDATE training_plan SET description = ? WHERE user_id = ? AND id = ?",
+      )
+      .bind(newDesc, userId, plan.id)
       .run();
   }
 
   // If we modified it, we should probably reset the sync status (garmin_workout_id) so it resyncs
   // But for now, let's just assume the next sync loop will handle it (OpenCoach does not currently auto-update modified Garmin workouts, but that's a separate issue).
   // Safest is to nullify the garmin ID so it gets pushed as a new workout if needed.
-  await updatePlanGarminId(db, plan.id, "");
+  await updatePlanGarminId(db, userId, plan.id, "");
 
   let changeMsg = `Updated workout on ${date}`;
   if (new_date) changeMsg += ` -> moved to ${new_date}`;
@@ -371,13 +381,14 @@ async function toolUpdateWorkout(
 // Tool Implementation: Add Workout
 async function toolAddWorkout(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const { date, type, distance_km, description } = args;
 
   const conflict = await db
-    .prepare("SELECT * FROM training_plan WHERE scheduled_date = ?")
-    .bind(date)
+    .prepare("SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date = ?")
+    .bind(userId, date)
     .first();
   if (conflict) {
     return {
@@ -388,6 +399,7 @@ async function toolAddWorkout(
 
   const newPlan: TrainingPlan = {
     id: crypto.randomUUID(),
+    user_id: userId,
     scheduled_date: date,
     week_number: 1, // Defaulting to 1 for ad-hoc adds, logic could be smarter to find current week
     type: type,
@@ -410,19 +422,21 @@ async function toolAddWorkout(
 // Tool Implementation: Regenerate Week
 async function toolRegenerateWeek(
   db: LocalDatabase,
+  userId: string,
 ): Promise<{ success: boolean; message: string }> {
   // This calls the existing logic in coach.ts
   // We import generateFullPlan from coach.ts (circular dependency risk? coach.ts depends on db.ts, tools.ts depends on coach.ts)
   // Actually coach.ts depends on db.ts. tools.ts depends on coach.ts.
   // db.ts should NOT depend on tools or coach. Safe.
 
-  const result = await generateFullPlan(db);
+  const result = await generateFullPlan(db, userId);
   return result;
 }
 
 // Tool Implementation: Sync Garmin Runs
 async function toolSyncGarminRuns(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const limit = args.limit || 10;
@@ -437,7 +451,7 @@ async function toolSyncGarminRuns(
   }
 
   // Check Garmin credentials
-  const credentials = await getGarminCredentials(db);
+  const credentials = await getGarminCredentials(db, userId);
   if (!credentials) {
     return {
       success: false,
@@ -448,10 +462,10 @@ async function toolSyncGarminRuns(
 
   try {
     // Fetch recent runs from Garmin
-    const recentRuns = await fetchRecentRuns(db, limit);
+    const recentRuns = await fetchRecentRuns(db, userId, limit);
 
     // Get existing activity IDs to avoid duplicates
-    const existingIds = await getExistingActivityIds(db);
+    const existingIds = await getExistingActivityIds(db, userId);
 
     // Filter to only new runs
     const newRuns = recentRuns.filter(
@@ -468,18 +482,18 @@ async function toolSyncGarminRuns(
     // Sync each new run
     for (const run of newRuns) {
       // Insert the run
-      await insertRun(db, {
+      await insertRun(db, userId, {
         ...run,
         ai_feedback: null,
       });
 
       // Match to training plan
-      await matchRunToPlan(db, run.date);
+      await matchRunToPlan(db, userId, run.date);
 
       // Generate AI feedback asynchronously (don't await)
-      analyzeRun(db, run)
+      analyzeRun(db, userId, run)
         .then((feedback) =>
-          updateRunFeedback(db, run.garmin_activity_id, feedback),
+          updateRunFeedback(db, userId, run.garmin_activity_id, feedback),
         )
         .catch((err) => console.error("Failed to generate AI feedback:", err));
     }
@@ -510,12 +524,13 @@ async function toolSyncGarminRuns(
 // Tool Implementation: Toggle Workout Status
 async function toolToggleWorkoutStatus(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const { date, status } = args;
 
   // Find the workout
-  const plan = await getWorkoutByDate(db, date);
+  const plan = await getWorkoutByDate(db, userId, date);
 
   if (!plan) {
     return {
@@ -525,7 +540,7 @@ async function toolToggleWorkoutStatus(
   }
 
   // Update status
-  await updatePlanStatus(db, plan.id, status);
+  await updatePlanStatus(db, userId, plan.id, status);
 
   const actionMsg =
     status === "Completed"
@@ -538,6 +553,7 @@ async function toolToggleWorkoutStatus(
 // Tool Implementation: Move Workout to Today
 async function toolMoveWorkoutToToday(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const { original_date } = args;
@@ -546,9 +562,9 @@ async function toolMoveWorkoutToToday(
   // Find the workout to move
   const plan = await db
     .prepare(
-      "SELECT * FROM training_plan WHERE scheduled_date = ? AND status = 'Pending'",
+      "SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date = ? AND status = 'Pending'",
     )
-    .bind(original_date)
+    .bind(userId, original_date)
     .first<TrainingPlan>();
 
   if (!plan) {
@@ -561,27 +577,31 @@ async function toolMoveWorkoutToToday(
   // Check if there's already something today
   const todayPlan = await db
     .prepare(
-      "SELECT id, type FROM training_plan WHERE scheduled_date = ? AND status = 'Pending'",
+      "SELECT id, type FROM training_plan WHERE user_id = ? AND scheduled_date = ? AND status = 'Pending'",
     )
-    .bind(today)
+    .bind(userId, today)
     .first<{ id: string; type: string }>();
 
   if (todayPlan) {
     // Swap them
     await db
-      .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-      .bind(original_date, todayPlan.id)
+      .prepare(
+        "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+      )
+      .bind(original_date, userId, todayPlan.id)
       .run();
   }
 
   // Move the workout to today
   await db
-    .prepare("UPDATE training_plan SET scheduled_date = ? WHERE id = ?")
-    .bind(today, plan.id)
+    .prepare(
+      "UPDATE training_plan SET scheduled_date = ? WHERE user_id = ? AND id = ?",
+    )
+    .bind(today, userId, plan.id)
     .run();
 
   // Clear Garmin workout ID to force re-sync
-  await updatePlanGarminId(db, plan.id, "");
+  await updatePlanGarminId(db, userId, plan.id, "");
 
   const swapMsg = todayPlan
     ? `Swapped workouts: ${plan.type} run moved to today, ${todayPlan.type} run moved to ${original_date}.`
@@ -593,12 +613,13 @@ async function toolMoveWorkoutToToday(
 // Tool Implementation: Delete Workout
 async function toolDeleteWorkout(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const { date, reason } = args;
 
   // Find the workout
-  const plan = await getWorkoutByDate(db, date);
+  const plan = await getWorkoutByDate(db, userId, date);
 
   if (!plan) {
     return {
@@ -610,7 +631,7 @@ async function toolDeleteWorkout(
   // Delete from Garmin if it was synced
   if (plan.garmin_workout_id) {
     try {
-      await deleteGarminWorkout(db, plan.garmin_workout_id);
+      await deleteGarminWorkout(db, userId, plan.garmin_workout_id);
     } catch (err) {
       console.warn("Failed to delete from Garmin:", err);
       // Continue anyway - local deletion is more important
@@ -618,7 +639,7 @@ async function toolDeleteWorkout(
   }
 
   // Delete from local DB
-  await dbDeleteWorkout(db, plan.id);
+  await dbDeleteWorkout(db, userId, plan.id);
 
   return {
     success: true,
@@ -629,10 +650,11 @@ async function toolDeleteWorkout(
 // Tool Implementation: Push to Garmin Watch
 async function toolPushToGarminWatch(
   db: LocalDatabase,
+  userId: string,
   _args: any,
 ): Promise<{ success: boolean; message: string }> {
   // Check if Garmin is connected
-  const credentials = await getGarminCredentials(db);
+  const credentials = await getGarminCredentials(db, userId);
   if (!credentials) {
     return {
       success: false,
@@ -642,7 +664,7 @@ async function toolPushToGarminWatch(
 
   try {
     // Get upcoming workouts (next 7 days)
-    const upcomingPlans = await getUpcomingPlans(db, 7);
+    const upcomingPlans = await getUpcomingPlans(db, userId, 7);
 
     if (upcomingPlans.length === 0) {
       return {
@@ -671,6 +693,7 @@ async function toolPushToGarminWatch(
 // Tool Implementation: Get Upcoming Workouts
 async function toolGetUpcomingWorkouts(
   db: LocalDatabase,
+  userId: string,
   args: any,
 ): Promise<{ success: boolean; message: string }> {
   const days = args.days || 7;
@@ -682,7 +705,7 @@ async function toolGetUpcomingWorkouts(
     futureDate.setDate(futureDate.getDate() + days);
     const endDate = futureDate.toISOString().split("T")[0];
 
-    const workouts = await getWorkoutsInRange(db, today, endDate);
+    const workouts = await getWorkoutsInRange(db, userId, today, endDate);
 
     if (workouts.length === 0) {
       return {

@@ -27,20 +27,22 @@ export interface BulkImportPayload {
 // GET: List recent runs
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
-	const runs = await getRecentRuns(db, 20);
+	const runs = await getRecentRuns(db, userId, 20);
 	return json({ runs });
 };
 
 // POST: Add a manual run
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const payload = (await request.json()) as ManualRunPayload;
 
@@ -65,12 +67,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	};
 
 	// Insert run
-	await insertRun(db, run);
+	await insertRun(db, userId, run);
 
 	// Get AI feedback
 	try {
-		const feedback = await analyzeRun(db, run);
-		await updateRunFeedback(db, activityId, feedback);
+		const feedback = await analyzeRun(db, userId, run);
+		await updateRunFeedback(db, userId, activityId, feedback);
 	} catch (e) {
 		console.error('Failed to get AI feedback:', e);
 	}
@@ -85,9 +87,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 // PUT: Bulk import runs (from Garmin sync script)
 export const PUT: RequestHandler = async ({ request, locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const payload = (await request.json()) as BulkImportPayload;
 
@@ -100,7 +103,7 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 
 	for (const run of payload.runs) {
 		// Skip if already exists
-		const existing = await getRunByActivityId(db, run.garmin_activity_id);
+		const existing = await getRunByActivityId(db, userId, run.garmin_activity_id);
 		if (existing) {
 			skipped++;
 			continue;
@@ -118,12 +121,12 @@ export const PUT: RequestHandler = async ({ request, locals }) => {
 			map_polyline: null
 		};
 
-		await insertRun(db, runData);
+		await insertRun(db, userId, runData);
 		imported++;
 
 		// Get AI feedback (don't block on this)
-		analyzeRun(db, runData)
-			.then((feedback) => updateRunFeedback(db, run.garmin_activity_id, feedback))
+		analyzeRun(db, userId, runData)
+			.then((feedback) => updateRunFeedback(db, userId, run.garmin_activity_id, feedback))
 			.catch((e) => console.error('Failed to get AI feedback:', e));
 	}
 

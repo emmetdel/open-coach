@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import { onMount } from 'svelte';
 	import { Button } from '$lib/components/ui/button';
 	import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '$lib/components/ui/card';
 	import { Input } from '$lib/components/ui/input';
@@ -12,23 +13,51 @@
 
 	// Derived values from props (reactive)
 	let garminFromEnv = $derived(data.garminFromEnv ?? false);
-	let isEditing = $derived(!!(data.existingSettings?.garminEmail && data.existingSettings?.targetDate));
+	let primaryGoal = $derived(data.primaryGoal || null);
+	let isEditing = $derived(!!primaryGoal);
 	let initialEmail = $derived(data.existingSettings?.garminEmail || '');
-	let initialTargetDate = $derived(data.existingSettings?.targetDate || '');
 	let initialDays = $derived(data.existingSettings?.availableDays || []);
 	let initialFitness = $derived(data.existingSettings?.currentFitness || '');
 
-	// Start at step 2 (Goals) if editing OR if Garmin is from env vars
+	// Start at step 1 (Goal-first onboarding)
 	let step = $state(1);
-	$effect(() => {
-		if (isEditing || garminFromEnv) step = 2;
-	});
 	
 	let loading = $state(false);
 	let error = $state('');
 	let resetting = $state(false);
 
-	// Step 1: Garmin Credentials
+	// Step 1: Goal & Schedule
+	let goalId = $state<string | null>(primaryGoal?.id || null);
+	let goalName = $state(primaryGoal?.name || '');
+	let goalType = $state(primaryGoal?.goal_type || 'distance');
+	let goalTargetDate = $state(primaryGoal?.target_date || '');
+	let goalTargetDistance = $state(primaryGoal?.target_distance_km || 10);
+	let goalTargetDuration = $state(primaryGoal?.target_duration_minutes || '');
+	let goalDescription = $state(primaryGoal?.description || '');
+
+	let minGoalDate = $state('');
+	let maxGoalDate = $state('');
+
+	onMount(() => {
+		const today = new Date();
+		const min = new Date(today);
+		min.setDate(min.getDate() + 56);
+		minGoalDate = min.toISOString().split('T')[0];
+
+		const max = new Date(today);
+		max.setFullYear(max.getFullYear() + 1);
+		maxGoalDate = max.toISOString().split('T')[0];
+	});
+
+	let selectedDays = $state<string[]>([]);
+	let currentFitness = $state('');
+
+	$effect(() => {
+		if (initialDays.length && !selectedDays.length) selectedDays = [...initialDays];
+		if (initialFitness && !currentFitness) currentFitness = initialFitness;
+	});
+
+	// Step 2: Garmin Credentials
 	let garminEmail = $state('');
 	let garminPassword = $state('');
 	
@@ -51,10 +80,10 @@
 			const result = await res.json();
 			
 			if (res.ok && result.success) {
-				// Clear local state and go to step 1
+				// Clear local state and go to Garmin step
 				garminEmail = '';
 				garminPassword = '';
-				step = 1;
+				step = 2;
 			} else {
 				error = result.message || 'Failed to reset credentials';
 			}
@@ -64,18 +93,6 @@
 			resetting = false;
 		}
 	}
-
-	// Step 2: Goals
-	let targetDate = $state('');
-	let selectedDays = $state<string[]>([]);
-	let currentFitness = $state('');
-	
-	// Initialize goals from props on mount
-	$effect(() => {
-		if (initialTargetDate && !targetDate) targetDate = initialTargetDate;
-		if (initialDays.length && !selectedDays.length) selectedDays = [...initialDays];
-		if (initialFitness && !currentFitness) currentFitness = initialFitness;
-	});
 
 	// Step 3: Notifications
 	let notificationEmail = $state('');
@@ -131,7 +148,7 @@
 				})
 			});
 
-			step = 2;
+			step = 3;
 		} catch (e) {
 			error = 'Network error. Please try again.';
 		} finally {
@@ -139,9 +156,26 @@
 		}
 	}
 
-	async function saveGoals(andGeneratePlan = false) {
-		if (!targetDate || selectedDays.length === 0) {
-			error = 'Please select a target date and at least one available day';
+	async function saveGoalAndSchedule() {
+		if (!goalName || !goalTargetDate) {
+			error = 'Please name your goal and choose a target date';
+			return;
+		}
+
+		const distanceValue = Number(goalTargetDistance);
+		const durationValue = Number(goalTargetDuration);
+		if (goalType === 'time_goal' && (!durationValue || durationValue < 10)) {
+			error = 'Please enter a target time (at least 10 minutes)';
+			return;
+		}
+
+		if (goalType !== 'time_goal' && (!distanceValue || distanceValue < 1)) {
+			error = 'Please enter a target distance for this goal';
+			return;
+		}
+
+		if (selectedDays.length === 0) {
+			error = 'Select at least one training day';
 			return;
 		}
 
@@ -149,31 +183,61 @@
 		error = '';
 
 		try {
-			const res = await fetch('/api/settings', {
+			const goalPayload = {
+				name: goalName,
+				goal_type: goalType,
+				target_date: goalTargetDate,
+				target_distance_km: goalType === 'time_goal' ? null : distanceValue,
+				target_duration_minutes: goalType === 'time_goal' ? durationValue : null,
+				description: goalDescription || null
+			};
+
+			const goalRes = await fetch(goalId ? `/api/goals/${goalId}` : '/api/goals', {
+				method: goalId ? 'PATCH' : 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(goalPayload)
+			});
+
+			const goalData = await goalRes.json();
+			if (!goalRes.ok || !goalData.success) {
+				error = goalData.error || 'Failed to save goal';
+				return;
+			}
+
+			if (!goalId && goalData.goalId) {
+				goalId = goalData.goalId;
+			}
+
+			const settingsRes = await fetch('/api/settings', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					target_date: targetDate,
+					target_date: goalTargetDate,
 					available_days: selectedDays,
 					current_fitness: currentFitness
 				})
 			});
 
-			const result = await res.json();
-
-			if (!res.ok || !result.success) {
-				error = result.errors?.join(', ') || 'Failed to save goals';
+			const settingsData = await settingsRes.json();
+			if (!settingsRes.ok || !settingsData.success) {
+				error = settingsData.errors?.join(', ') || 'Failed to save schedule';
 				return;
 			}
 
-			// If editing, regenerate the plan and go back to dashboard
-			if (andGeneratePlan || isEditing) {
-				await fetch('/api/plan', { method: 'POST' });
+			if (goalId) {
+				await fetch('/api/plan/generate', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ goalId, plan_generation_strategy: 'goal_based' })
+				});
+			}
+
+			if (isEditing) {
 				goto('/');
 				return;
 			}
 
-			step = 3;
+			step = 2;
 		} catch (e) {
 			error = 'Network error. Please try again.';
 		} finally {
@@ -301,7 +365,7 @@
 							{/if}
 						</div>
 						<span class={`text-sm ${step >= s ? 'text-slate-200' : 'text-slate-500'}`}>
-							{s === 1 ? 'Connect' : s === 2 ? 'Goals' : 'Notify'}
+							{s === 1 ? 'Goal' : s === 2 ? 'Garmin' : 'Notify'}
 						</span>
 					</div>
 					{#if s < 3}
@@ -310,18 +374,144 @@
 				{/each}
 			</div>
 
-			<!-- Step 1: Garmin Credentials -->
+			<!-- Step 1: Goal & Schedule -->
 			{#if step === 1}
+				<Card class="border-slate-700/50 bg-slate-850/80 backdrop-blur">
+					<CardHeader>
+						<CardTitle>{isEditing ? 'Refine Your Goal' : 'Start with your goal'}</CardTitle>
+						<CardDescription>
+							Everything in OpenCoach cascades from this goal. We'll build your plan around it.
+						</CardDescription>
+					</CardHeader>
+					<CardContent>
+						<form onsubmit={(e) => { e.preventDefault(); saveGoalAndSchedule(); }} class="space-y-6">
+							<div class="space-y-2">
+								<Label for="goal-name">Goal Name</Label>
+								<Input
+									id="goal-name"
+									type="text"
+									placeholder="Run my first 10km"
+									bind:value={goalName}
+								/>
+							</div>
+
+							<div class="space-y-2">
+								<Label for="goal-type">Goal Type</Label>
+								<select
+									id="goal-type"
+									bind:value={goalType}
+									class="w-full rounded-md border border-slate-700 bg-slate-800 px-3 py-2 text-white"
+								>
+									<option value="distance">Distance Goal</option>
+									<option value="race">Race Event</option>
+									<option value="time_goal">Time Goal</option>
+								</select>
+							</div>
+
+							<div class="space-y-2">
+								<Label for="goal-date">Target Date</Label>
+								<Input
+									id="goal-date"
+									type="date"
+									bind:value={goalTargetDate}
+									min={minGoalDate}
+									max={maxGoalDate}
+								/>
+							</div>
+
+							{#if goalType !== 'time_goal'}
+								<div class="space-y-2">
+									<Label for="goal-distance">Target Distance (km)</Label>
+									<Input
+										id="goal-distance"
+										type="number"
+										min="1"
+										step="0.1"
+										bind:value={goalTargetDistance}
+									/>
+								</div>
+							{:else}
+								<div class="space-y-2">
+									<Label for="goal-duration">Target Time (minutes)</Label>
+									<Input
+										id="goal-duration"
+										type="number"
+										min="10"
+										step="1"
+										bind:value={goalTargetDuration}
+									/>
+								</div>
+							{/if}
+
+							<div class="space-y-2">
+								<Label for="goal-description">Notes (optional)</Label>
+								<Textarea
+									id="goal-description"
+									placeholder="Anything we should know about your goal or schedule?"
+									bind:value={goalDescription}
+								/>
+							</div>
+
+							<div class="space-y-2">
+								<Label>Available Days for Running</Label>
+								<div class="flex flex-wrap gap-2">
+									{#each daysOfWeek as day}
+										<button
+											type="button"
+											onclick={() => toggleDay(day)}
+											class={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
+												selectedDays.includes(day)
+													? 'bg-forest-600 text-white shadow-lg shadow-forest-900/30'
+													: 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+											}`}
+										>
+											{day}
+										</button>
+									{/each}
+								</div>
+							</div>
+
+							<div class="space-y-2">
+								<Label for="current-fitness">Current Fitness Level (optional)</Label>
+								<Textarea
+									id="current-fitness"
+									placeholder="e.g., I can run 5k comfortably, usually run 2-3 times per week..."
+									bind:value={currentFitness}
+								/>
+							</div>
+
+							{#if error}
+								<div class="flex items-center gap-2 rounded-lg bg-coral-500/10 p-3 text-sm text-coral-400">
+									<AlertCircle class="h-4 w-4 shrink-0" />
+									{error}
+								</div>
+							{/if}
+
+							<Button type="submit" class="w-full" disabled={loading}>
+								{#if loading}
+									<Loader2 class="h-4 w-4 animate-spin" />
+									Building plan...
+								{:else}
+									{isEditing ? 'Update Goal & Plan' : 'Build My Plan'}
+									<ChevronRight class="h-4 w-4" />
+								{/if}
+							</Button>
+						</form>
+					</CardContent>
+				</Card>
+			{/if}
+
+			<!-- Step 2: Garmin Credentials -->
+			{#if step === 2}
 				<Card class="border-slate-700/50 bg-slate-850/80 backdrop-blur">
 					<CardHeader>
 						<CardTitle>Connect Garmin</CardTitle>
 						<CardDescription>
-							Link your Garmin Connect account to sync your runs.
+							Sync your runs automatically so your plan stays up to date.
 						</CardDescription>
 					</CardHeader>
 					<CardContent>
 						{#if garminFromEnv}
-							<!-- Credentials from env vars - show info and skip -->
 							<div class="space-y-6">
 								<div class="rounded-lg bg-forest-500/10 border border-forest-500/20 p-4 text-sm">
 									<p class="font-medium text-forest-400 mb-2">✓ Garmin credentials configured</p>
@@ -329,7 +519,7 @@
 									<p class="text-slate-500 mt-2 text-xs">Email: {data.existingSettings?.garminEmail}</p>
 								</div>
 
-								<Button type="button" class="w-full" onclick={() => (step = 2)}>
+								<Button type="button" class="w-full" onclick={() => (step = 3)}>
 									Continue
 									<ChevronRight class="h-4 w-4" />
 								</Button>
@@ -382,132 +572,30 @@
 								</Button>
 							</form>
 						{/if}
-					</CardContent>
-				</Card>
-			{/if}
 
-			<!-- Step 2: Goals -->
-			{#if step === 2}
-				<Card class="border-slate-700/50 bg-slate-850/80 backdrop-blur">
-					<CardHeader>
-						<CardTitle>{isEditing ? 'Edit Your Goals' : 'Set Your Goals'}</CardTitle>
-						<CardDescription>
-							{isEditing 
-								? 'Update your running days and goals. A new plan will be generated.'
-								: 'Tell us about your running goals and availability.'}
-						</CardDescription>
-					</CardHeader>
-					<CardContent>
-						<form onsubmit={(e) => { e.preventDefault(); saveGoals(); }} class="space-y-6">
-							<div class="space-y-2">
-								<Label for="target-date">Target Race/Goal Date</Label>
-								<Input
-									id="target-date"
-									type="date"
-									bind:value={targetDate}
-									min={new Date().toISOString().split('T')[0]}
-								/>
+						{#if !garminFromEnv && data.existingSettings?.garminEmail}
+							<div class="mt-6 rounded-lg bg-slate-800/50 p-4 text-sm">
+								<p class="text-slate-400 mb-3">
+									Wrong Garmin credentials? 
+									<span class="text-slate-500">({data.existingSettings.garminEmail})</span>
+								</p>
+								<Button 
+									type="button" 
+									variant="outline" 
+									size="sm"
+									onclick={resetGarminCredentials}
+									disabled={resetting}
+								>
+									{#if resetting}
+										<Loader2 class="h-4 w-4 animate-spin" />
+										Resetting...
+									{:else}
+										<RotateCcw class="h-4 w-4" />
+										Reset Garmin Credentials
+									{/if}
+								</Button>
 							</div>
-
-							<div class="space-y-2">
-								<Label>Available Days for Running</Label>
-								<div class="flex flex-wrap gap-2">
-									{#each daysOfWeek as day}
-										<button
-											type="button"
-											onclick={() => toggleDay(day)}
-											class={`rounded-lg px-4 py-2 text-sm font-medium transition-all ${
-												selectedDays.includes(day)
-													? 'bg-forest-600 text-white shadow-lg shadow-forest-900/30'
-													: 'bg-slate-800 text-slate-300 hover:bg-slate-700'
-											}`}
-										>
-											{day}
-										</button>
-									{/each}
-								</div>
-							</div>
-
-							<div class="space-y-2">
-								<Label for="current-fitness">Current Fitness Level (optional)</Label>
-								<Textarea
-									id="current-fitness"
-									placeholder="e.g., I can run 5k comfortably, usually run 2-3 times per week..."
-									bind:value={currentFitness}
-								/>
-							</div>
-
-							{#if error}
-								<div class="flex items-center gap-2 rounded-lg bg-coral-500/10 p-3 text-sm text-coral-400">
-									<AlertCircle class="h-4 w-4 shrink-0" />
-									{error}
-								</div>
-							{/if}
-
-							<!-- Reset Garmin credentials option (only if not from env vars) -->
-							{#if !garminFromEnv && data.existingSettings?.garminEmail}
-								<div class="rounded-lg bg-slate-800/50 p-4 text-sm">
-									<p class="text-slate-400 mb-3">
-										Wrong Garmin credentials? 
-										<span class="text-slate-500">({data.existingSettings.garminEmail})</span>
-									</p>
-									<Button 
-										type="button" 
-										variant="outline" 
-										size="sm"
-										onclick={resetGarminCredentials}
-										disabled={resetting}
-									>
-										{#if resetting}
-											<Loader2 class="h-4 w-4 animate-spin" />
-											Resetting...
-										{:else}
-											<RotateCcw class="h-4 w-4" />
-											Reset Garmin Credentials
-										{/if}
-									</Button>
-								</div>
-							{/if}
-
-							<div class="flex gap-3">
-								{#if isEditing}
-									<Button type="button" variant="outline" onclick={() => goto('/')} class="flex-1">
-										Cancel
-									</Button>
-									<Button type="submit" class="flex-1" disabled={loading}>
-										{#if loading}
-											<Loader2 class="h-4 w-4 animate-spin" />
-											Saving...
-										{:else}
-											Save & Regenerate Plan
-										{/if}
-									</Button>
-								{:else if garminFromEnv}
-									<Button type="submit" class="flex-1" disabled={loading}>
-										{#if loading}
-											<Loader2 class="h-4 w-4 animate-spin" />
-											Saving...
-										{:else}
-											Continue
-											<ChevronRight class="h-4 w-4" />
-										{/if}
-									</Button>
-								{:else}
-									<Button type="button" variant="outline" onclick={() => (step = 1)} class="flex-1">
-										Back
-									</Button>
-									<Button type="submit" class="flex-1" disabled={loading}>
-										{#if loading}
-											<Loader2 class="h-4 w-4 animate-spin" />
-											Saving...
-										{:else}
-											Continue
-											<ChevronRight class="h-4 w-4" />
-										{/if}
-									</Button>
-								{/if}
-							</div>
-						</form>
+						{/if}
 					</CardContent>
 				</Card>
 			{/if}

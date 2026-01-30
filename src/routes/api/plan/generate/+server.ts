@@ -20,19 +20,10 @@ import { generateGoalBasedPlan } from "$lib/server/goalBasedPlanner";
 // POST: Generate a fresh plan (deletes existing and creates new)
 export const POST: RequestHandler = async ({ locals, request }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, "Database not available");
   }
-
-  // Check if setup is complete
-  const isSetup = await hasCompletedSetup(db);
-  if (!isSetup) {
-    return json({
-      success: false,
-      weeksGenerated: 0,
-      message: "Please complete setup first (Garmin credentials and goals)",
-    });
-  }
+  const userId = locals.user.id;
 
   try {
     const body = (await request.json().catch(() => ({}))) as {
@@ -42,16 +33,29 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
     const configuredStrategy = (await getSetting(
       db,
+      userId,
       SETTING_KEYS.PLAN_GENERATION_STRATEGY,
     )) as "auto" | "goal_based" | "legacy" | null;
     const strategy =
       body.plan_generation_strategy || configuredStrategy || "auto";
 
-    // Get active goals
-    const goals = await getActiveGoals(db);
+    const availableDaysSetting = await getSetting(
+      db,
+      userId,
+      SETTING_KEYS.AVAILABLE_DAYS,
+    );
+    const goals = await getActiveGoals(db, userId);
 
     if (strategy === "legacy") {
-      return await generateLegacyPlan(db);
+      return await generateLegacyPlan(db, userId);
+    }
+
+    if (!availableDaysSetting) {
+      return json({
+        success: false,
+        weeksGenerated: 0,
+        message: "Set your available training days before generating a plan.",
+      });
     }
 
     if (strategy === "goal_based" && goals.length === 0) {
@@ -65,12 +69,12 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
     // Auto strategy falls back to legacy if no goals
     if (strategy === "auto" && goals.length === 0) {
-      return await generateLegacyPlan(db);
+      return await generateLegacyPlan(db, userId);
     }
 
     // Use goal-based generation
     const primaryGoal = body.goalId
-      ? await getGoalById(db, body.goalId)
+      ? await getGoalById(db, userId, body.goalId)
       : goals[0];
 
     if (!primaryGoal) {
@@ -83,21 +87,22 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 
     // First, clean up existing Garmin workouts
     try {
-      await deleteAllOpenCoachWorkouts(db);
+      await deleteAllOpenCoachWorkouts(db, userId);
     } catch (garminErr) {
       console.warn("Could not delete existing Garmin workouts:", garminErr);
       // Continue anyway
     }
 
     // Delete ONLY future pending workouts (preserve history)
-    await deleteFuturePlans(db);
+    await deleteFuturePlans(db, userId);
 
     // Generate goal-based plan
-    const currentFitness = await getSetting(db, SETTING_KEYS.CURRENT_FITNESS);
-    const availableDaysJson = await getSetting(
+    const currentFitness = await getSetting(
       db,
-      SETTING_KEYS.AVAILABLE_DAYS,
+      userId,
+      SETTING_KEYS.CURRENT_FITNESS,
     );
+    const availableDaysJson = availableDaysSetting;
 
     const plan = await generateGoalBasedPlan(db, {
       goalId: primaryGoal.id,
@@ -107,7 +112,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       availableDays: availableDaysJson
         ? JSON.parse(availableDaysJson)
         : ["Mon", "Wed", "Fri", "Sun"],
-      recentRuns: await getRecentRuns(db, 28), // Last 4 weeks
+      recentRuns: await getRecentRuns(db, userId, 28), // Last 4 weeks
     });
 
     // Insert new workouts
@@ -115,6 +120,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       for (const workout of week.workouts) {
         await insertPlan(db, {
           id: workout.id,
+          user_id: userId,
           scheduled_date: workout.scheduled_date,
           week_number: week.weekNumber,
           type: workout.type as any,
@@ -130,9 +136,9 @@ export const POST: RequestHandler = async ({ locals, request }) => {
     }
 
     // Update metadata
-    await setPlanMetadata(db, "primary_goal_id", primaryGoal.id);
-    await setPlanMetadata(db, "generation_strategy", "goal_based");
-    await setPlanMetadata(db, "total_weeks", String(plan.totalWeeks));
+    await setPlanMetadata(db, userId, "primary_goal_id", primaryGoal.id);
+    await setPlanMetadata(db, userId, "generation_strategy", "goal_based");
+    await setPlanMetadata(db, userId, "total_weeks", String(plan.totalWeeks));
 
     return json({
       success: true,
@@ -154,21 +160,21 @@ export const POST: RequestHandler = async ({ locals, request }) => {
 /**
  * Legacy plan generation for users without goals
  */
-async function generateLegacyPlan(db: Database) {
+async function generateLegacyPlan(db: Database, userId: string) {
   try {
     // First, clean up existing Garmin workouts
     try {
-      await deleteAllOpenCoachWorkouts(db);
+      await deleteAllOpenCoachWorkouts(db, userId);
     } catch (garminErr) {
       console.warn("Could not delete existing Garmin workouts:", garminErr);
       // Continue anyway
     }
 
     // Delete existing plans
-    await deleteAllPlans(db);
+    await deleteAllPlans(db, userId);
 
     // Generate new full plan
-    const result = await generateFullPlan(db);
+    const result = await generateFullPlan(db, userId);
 
     return json({
       success: result.success,

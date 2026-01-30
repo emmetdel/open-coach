@@ -4,9 +4,10 @@ import { hasValidTokens } from '$lib/server/garmin';
 
 export const load: PageServerLoad = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		return { settings: null };
 	}
+	const userId = locals.user.id;
 
 	// Load all settings
 	const [
@@ -19,14 +20,14 @@ export const load: PageServerLoad = async ({ locals }) => {
 		garminConnected,
 		planGenerationStrategy
 	] = await Promise.all([
-		getSetting(db, SETTING_KEYS.OPENROUTER_KEY),
-		getSetting(db, SETTING_KEYS.OPENROUTER_MODEL),
-		getSetting(db, SETTING_KEYS.TARGET_DATE),
-		getSetting(db, SETTING_KEYS.AVAILABLE_DAYS),
-		getSetting(db, SETTING_KEYS.CURRENT_FITNESS),
-		getSetting(db, SETTING_KEYS.PUSH_ENABLED),
-		hasValidTokens(db),
-		getSetting(db, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
+		getSetting(db, userId, SETTING_KEYS.OPENROUTER_KEY),
+		getSetting(db, userId, SETTING_KEYS.OPENROUTER_MODEL),
+		getSetting(db, userId, SETTING_KEYS.TARGET_DATE),
+		getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS),
+		getSetting(db, userId, SETTING_KEYS.CURRENT_FITNESS),
+		getSetting(db, userId, SETTING_KEYS.PUSH_ENABLED),
+		hasValidTokens(db, userId),
+		getSetting(db, userId, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
 	]);
 
 	// Parse available days
@@ -60,4 +61,3 @@ export const load: PageServerLoad = async ({ locals }) => {
 		}
 	};
 };
-

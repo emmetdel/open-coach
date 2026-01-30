@@ -5,12 +5,13 @@ import { getGoalById, updateGoal, deleteGoal } from '$lib/server/db';
 // GET /api/goals/[id] - Get a specific goal
 export const GET: RequestHandler = async ({ locals, params }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, 'Database not available');
   }
+  const userId = locals.user.id;
 
   try {
-    const goal = await getGoalById(db, params.id);
+    const goal = await getGoalById(db, userId, params.id);
 
     if (!goal) {
       throw error(404, 'Goal not found');
@@ -29,13 +30,14 @@ export const GET: RequestHandler = async ({ locals, params }) => {
 // PATCH /api/goals/[id] - Update a goal
 export const PATCH: RequestHandler = async ({ locals, params, request }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, 'Database not available');
   }
+  const userId = locals.user.id;
 
   try {
     // Check if goal exists
-    const existingGoal = await getGoalById(db, params.id);
+    const existingGoal = await getGoalById(db, userId, params.id);
     if (!existingGoal) {
       throw error(404, 'Goal not found');
     }
@@ -66,7 +68,16 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
       }
     }
 
-    await updateGoal(db, params.id, updates);
+    if (updates.target_duration_minutes !== undefined) {
+      if (updates.target_duration_minutes < 10) {
+        return json(
+          { success: false, error: 'Target duration must be at least 10 minutes' },
+          { status: 400 }
+        );
+      }
+    }
+
+    await updateGoal(db, userId, params.id, updates);
 
     return json({
       success: true,
@@ -88,18 +99,19 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
 // DELETE /api/goals/[id] - Delete a goal
 export const DELETE: RequestHandler = async ({ locals, params }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, 'Database not available');
   }
+  const userId = locals.user.id;
 
   try {
     // Check if goal exists
-    const existingGoal = await getGoalById(db, params.id);
+    const existingGoal = await getGoalById(db, userId, params.id);
     if (!existingGoal) {
       throw error(404, 'Goal not found');
     }
 
-    await deleteGoal(db, params.id);
+    await deleteGoal(db, userId, params.id);
 
     return json({
       success: true,

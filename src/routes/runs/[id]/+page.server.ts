@@ -8,8 +8,11 @@ export const load: PageServerLoad = async ({ locals, params }) => {
 	if (!db) {
 		throw error(500, 'Database not available');
 	}
+	if (!locals.user) {
+		throw error(401, 'Unauthorized');
+	}
 
-	const run = await getRunByActivityId(db, params.id);
+	const run = await getRunByActivityId(db, locals.user.id, params.id);
 
 	if (!run) {
 		throw error(404, 'Run not found');

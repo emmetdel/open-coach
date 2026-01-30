@@ -668,6 +668,78 @@
                 </div>
             {/if}
 
+            <!-- Goal Spotlight -->
+            {#if data.primaryGoal}
+                <Card class="mb-6 sm:mb-8 border-forest-500/30 bg-linear-to-br from-slate-900 to-slate-950">
+                    <CardContent class="p-4 sm:p-6">
+                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-forest-400">
+                                    <Target class="h-3 w-3" />
+                                    Goal Spotlight
+                                </div>
+                                <h2 class="mt-2 font-display text-2xl font-bold text-white">
+                                    {data.primaryGoal.name}
+                                </h2>
+                                <p class="mt-1 text-sm text-slate-400">
+                                    Target date: {new Date(data.primaryGoal.target_date).toLocaleDateString("en-US", {
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric"
+                                    })}
+                                </p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm text-slate-400">Plan progress</p>
+                                <p class="text-3xl font-semibold text-forest-300">
+                                    {data.primaryGoalProgress?.percentComplete ?? 0}%
+                                </p>
+                                <p class="text-xs text-slate-500">
+                                    {data.primaryGoalProgress?.weeksRemaining ?? 0} weeks remaining
+                                </p>
+                            </div>
+                        </div>
+                        <div class="mt-4 h-2 w-full rounded-full bg-slate-800">
+                            <div
+                                class="h-2 rounded-full bg-forest-500 transition-all"
+                                style={`width: ${data.primaryGoalProgress?.percentComplete ?? 0}%`}
+                            ></div>
+                        </div>
+                        <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
+                            <span>
+                                {data.primaryGoalProgress?.runsCompleted ?? 0}/{data.primaryGoalProgress?.totalRuns ?? 0} runs completed
+                            </span>
+                            <span>•</span>
+                            <span>Longest run: {data.primaryGoalProgress?.longestRun ?? 0} km</span>
+                        </div>
+                        <div class="mt-4">
+                            <a href="/goals">
+                                <Button variant="outline" size="sm">
+                                    View Goal Plan
+                                </Button>
+                            </a>
+                        </div>
+                    </CardContent>
+                </Card>
+            {:else}
+                <Card class="mb-6 sm:mb-8 border-forest-500/30 bg-linear-to-br from-slate-900 to-slate-950">
+                    <CardContent class="p-6 text-center">
+                        <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-forest-500/20">
+                            <Target class="h-6 w-6 text-forest-400" />
+                        </div>
+                        <h2 class="mt-4 text-xl font-semibold text-white">Set your first goal</h2>
+                        <p class="mt-2 text-sm text-slate-400">
+                            Your goal is the heart of OpenCoach. Create one to unlock your training plan.
+                        </p>
+                        <div class="mt-4">
+                            <a href="/setup">
+                                <Button class="bg-forest-600 hover:bg-forest-700">Start Goal Setup</Button>
+                            </a>
+                        </div>
+                    </CardContent>
+                </Card>
+            {/if}
+
             <!-- Next Run Hero -->
             {#if data.nextRun}
                 <Card

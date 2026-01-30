@@ -19,9 +19,10 @@ interface PushPayload {
 // Send Web Push notification to all subscriptions
 export async function sendPushNotification(
 	db: Database,
+	userId: string,
 	payload: PushPayload
 ): Promise<{ sent: number; failed: number }> {
-	const settings = await getSettings(db, [
+	const settings = await getSettings(db, userId, [
 		SETTING_KEYS.PUSH_ENABLED,
 		SETTING_KEYS.VAPID_PUBLIC_KEY,
 		SETTING_KEYS.VAPID_PRIVATE_KEY
@@ -39,7 +40,7 @@ export async function sendPushNotification(
 		return { sent: 0, failed: 0 };
 	}
 
-	const subscriptions = await getPushSubscriptions(db);
+	const subscriptions = await getPushSubscriptions(db, userId);
 	let sent = 0;
 	let failed = 0;
 
@@ -59,7 +60,7 @@ export async function sendPushNotification(
 				sent++;
 			} else {
 				// Subscription might be expired, remove it
-				await deletePushSubscription(db, sub.endpoint);
+				await deletePushSubscription(db, userId, sub.endpoint);
 				failed++;
 			}
 		} catch (error) {
@@ -309,12 +310,13 @@ export async function generateVapidKeys(): Promise<{ publicKey: string; privateK
 // Send email notification (placeholder - implement with nodemailer or similar for Docker)
 export async function sendEmailNotification(
 	db: Database,
+	userId: string,
 	recipientEmail: string | undefined,
 	subject: string,
 	htmlBody: string,
 	_unused?: unknown
 ): Promise<boolean> {
-	const settings = await getSettings(db, [
+	const settings = await getSettings(db, userId, [
 		SETTING_KEYS.EMAIL_ENABLED,
 		SETTING_KEYS.NOTIFICATION_EMAIL
 	]);
@@ -339,9 +341,10 @@ export async function sendEmailNotification(
 // Notification: Run synced
 export async function notifyRunSynced(
 	db: Database,
+	userId: string,
 	run: Run
 ): Promise<void> {
-	const settings = await getSettings(db, [SETTING_KEYS.NOTIFY_ON_SYNC]);
+	const settings = await getSettings(db, userId, [SETTING_KEYS.NOTIFY_ON_SYNC]);
 	if (settings[SETTING_KEYS.NOTIFY_ON_SYNC] !== 'true') {
 		return;
 	}
@@ -354,7 +357,7 @@ export async function notifyRunSynced(
 	});
 
 	// Send push notification
-	await sendPushNotification(db, {
+	await sendPushNotification(db, userId, {
 		title: 'Run Synced! 🏃',
 		body: `${distance} on ${date}. ${run.ai_feedback?.slice(0, 100) || 'Great job!'}`,
 		tag: 'run-synced',
@@ -364,6 +367,7 @@ export async function notifyRunSynced(
 	// Send email notification
 	await sendEmailNotification(
 		db,
+		userId,
 		undefined,
 		`OpenCoach: New Run Synced - ${distance}`,
 		`
@@ -381,9 +385,10 @@ export async function notifyRunSynced(
 // Notification: Missed run
 export async function notifyMissedRun(
 	db: Database,
+	userId: string,
 	scheduledDate: string
 ): Promise<void> {
-	const settings = await getSettings(db, [SETTING_KEYS.NOTIFY_ON_MISSED]);
+	const settings = await getSettings(db, userId, [SETTING_KEYS.NOTIFY_ON_MISSED]);
 	if (settings[SETTING_KEYS.NOTIFY_ON_MISSED] !== 'true') {
 		return;
 	}
@@ -395,7 +400,7 @@ export async function notifyMissedRun(
 	});
 
 	// Send push notification
-	await sendPushNotification(db, {
+	await sendPushNotification(db, userId, {
 		title: 'Missed Run Rescheduled',
 		body: `Your ${date} run has been moved. No pressure - life happens!`,
 		tag: 'missed-run'
@@ -404,6 +409,7 @@ export async function notifyMissedRun(
 	// Send email notification
 	await sendEmailNotification(
 		db,
+		userId,
 		undefined,
 		`OpenCoach: Run Rescheduled`,
 		`

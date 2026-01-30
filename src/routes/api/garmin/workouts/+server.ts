@@ -5,12 +5,13 @@ import { deleteAllOpenCoachWorkouts } from '$lib/server/garmin';
 // DELETE: Remove all OpenCoach workouts from Garmin
 export const DELETE: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	try {
-		const result = await deleteAllOpenCoachWorkouts(db);
+		const result = await deleteAllOpenCoachWorkouts(db, userId);
 
 		return json({
 			success: true,

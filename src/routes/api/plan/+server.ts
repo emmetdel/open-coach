@@ -7,13 +7,14 @@ import { deleteAllOpenCoachWorkouts } from '$lib/server/garmin';
 // GET: Get upcoming planned runs
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const [upcomingPlans, nextRun] = await Promise.all([
-		getUpcomingPlans(db, 7),
-		getNextRun(db)
+		getUpcomingPlans(db, userId, 7),
+		getNextRun(db, userId)
 	]);
 
 	return json({
@@ -25,12 +26,13 @@ export const GET: RequestHandler = async ({ locals }) => {
 // POST: Generate a new weekly plan
 export const POST: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	// Check if setup is complete
-	const isSetup = await hasCompletedSetup(db);
+	const isSetup = await hasCompletedSetup(db, userId);
 	if (!isSetup) {
 		return json({
 			success: false,
@@ -40,7 +42,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const result = await generateWeeklyPlan(db);
+		const result = await generateWeeklyPlan(db, userId);
 		return json(result);
 	} catch (err) {
 		console.error('Plan generation failed:', err);
@@ -52,21 +54,22 @@ export const POST: RequestHandler = async ({ locals }) => {
 // DELETE: Clear all plans
 export const DELETE: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	try {
 		// First, try to delete workouts from Garmin
 		try {
-			await deleteAllOpenCoachWorkouts(db);
+			await deleteAllOpenCoachWorkouts(db, userId);
 		} catch (garminErr) {
 			console.warn('Could not delete Garmin workouts:', garminErr);
 			// Continue anyway - local deletion is more important
 		}
 
 		// Delete all local plans
-		await deleteAllPlans(db);
+		await deleteAllPlans(db, userId);
 
 		return json({
 			success: true,

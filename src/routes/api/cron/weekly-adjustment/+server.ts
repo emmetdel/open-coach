@@ -1,6 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getActiveGoals } from '$lib/server/db';
+import { getActiveGoals, listUsers } from '$lib/server/db';
 import { analyzeWeeklyProgress, adjustNextWeek } from '$lib/server/adaptivePlanner';
 import { sendPushNotification } from '$lib/server/notifications';
 import { isCronAuthorized } from '$lib/server/cronAuth';
@@ -18,38 +18,38 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   try {
-    // Get all active goals
-    const goals = await getActiveGoals(db);
-
     let goalsAdjusted = 0;
 
-    for (const goal of goals) {
-      // Analyze this week's performance
-      const analysis = await analyzeWeeklyProgress(db, goal.id);
+    const users = await listUsers(db);
 
-      console.log(`Goal: ${goal.name}, Status: ${analysis.recommendation}`);
+    for (const user of users) {
+      const goals = await getActiveGoals(db, user.id);
 
-      // Adjust next week based on performance
-      await adjustNextWeek(db, goal.id, analysis);
+      for (const goal of goals) {
+        const analysis = await analyzeWeeklyProgress(db, user.id, goal.id);
 
-      // Send notification if needed
-      if (analysis.recommendation === 'add_makeup') {
-        await sendPushNotification(db, {
-          title: 'Plan Adjusted',
-          body: `Added 1 extra easy run next week to stay on track for ${goal.name}`,
-          tag: `weekly-adjustment-${goal.id}`,
-          data: { url: '/goals' }
-        });
-      } else if (analysis.recommendation === 'extend_timeline') {
-        await sendPushNotification(db, {
-          title: 'Goal Extended',
-          body: `Your goal date for ${goal.name} has been extended by 1 week to help you stay on track`,
-          tag: `goal-extended-${goal.id}`,
-          data: { url: '/goals' }
-        });
+        console.log(`Goal: ${goal.name}, Status: ${analysis.recommendation}`);
+
+        await adjustNextWeek(db, user.id, goal.id, analysis);
+
+        if (analysis.recommendation === 'add_makeup') {
+          await sendPushNotification(db, user.id, {
+            title: 'Plan Adjusted',
+            body: `Added 1 extra easy run next week to stay on track for ${goal.name}`,
+            tag: `weekly-adjustment-${goal.id}`,
+            data: { url: '/goals' }
+          });
+        } else if (analysis.recommendation === 'extend_timeline') {
+          await sendPushNotification(db, user.id, {
+            title: 'Goal Extended',
+            body: `Your goal date for ${goal.name} has been extended by 1 week to help you stay on track`,
+            tag: `goal-extended-${goal.id}`,
+            data: { url: '/goals' }
+          });
+        }
+
+        goalsAdjusted++;
       }
-
-      goalsAdjusted++;
     }
 
     return json({
