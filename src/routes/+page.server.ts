@@ -8,6 +8,8 @@ import {
   getNextRun,
   getActiveGoals,
   getPlanMetadata,
+  getSetting,
+  SETTING_KEYS,
 } from "$lib/server/db";
 import {
   formatDistance,
@@ -57,6 +59,24 @@ export interface GoalProgress {
   longestRun: number;
   status: "on_track" | "behind" | "ahead";
   weeksRemaining: number;
+}
+
+export interface WeeklyProgress {
+  completed: number;
+  target: number;
+  weekStart: string;
+}
+
+/**
+ * Get the Monday of the current week
+ */
+function getMonday(date: Date): Date {
+  const d = new Date(date);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Adjust when Sunday
+  d.setDate(diff);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -186,6 +206,42 @@ export const load: PageServerLoad = async ({ locals }) => {
       ? goals[0]
       : null;
 
+  // Calculate weekly progress
+  const [runsPerWeekSetting, availableDaysSetting] = await Promise.all([
+    getSetting(db, userId, SETTING_KEYS.RUNS_PER_WEEK),
+    getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS),
+  ]);
+
+  // Determine weekly target (explicit setting or available days count)
+  let weeklyTarget = 3; // Default fallback
+  if (runsPerWeekSetting) {
+    weeklyTarget = parseInt(runsPerWeekSetting, 10);
+  } else if (availableDaysSetting) {
+    try {
+      const days = JSON.parse(availableDaysSetting);
+      weeklyTarget = Array.isArray(days) ? days.length : 3;
+    } catch {
+      weeklyTarget = 3;
+    }
+  }
+
+  // Get this week's run count
+  const weekStart = getMonday(new Date());
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekEnd.getDate() + 6);
+  weekEnd.setHours(23, 59, 59, 999);
+
+  const thisWeekRuns = runs.filter((r) => {
+    const runDate = new Date(r.date);
+    return runDate >= weekStart && runDate <= weekEnd;
+  }).length;
+
+  const weeklyProgress: WeeklyProgress = {
+    completed: thisWeekRuns,
+    target: weeklyTarget,
+    weekStart: weekStart.toISOString(),
+  };
+
   let primaryGoalProgress = null;
   if (primaryGoal) {
     primaryGoalProgress = await calculateGoalProgress(
@@ -291,6 +347,7 @@ export const load: PageServerLoad = async ({ locals }) => {
     todaysRun: todaysRunDisplay,
     primaryGoal,
     primaryGoalProgress,
+    weeklyProgress,
   };
 };
 

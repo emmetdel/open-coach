@@ -46,7 +46,8 @@
         targetDate = data.settings?.targetDate || "";
         availableDays = data.settings?.availableDays || [];
         currentFitness = data.settings?.currentFitness || "";
-        planGenerationStrategy = data.settings?.planGenerationStrategy || "auto";
+        runsPerWeek = data.settings?.runsPerWeek ?? null;
+        planGenerationStrategy = (data.settings?.planGenerationStrategy as "auto" | "goal_based" | "legacy") || "auto";
         
         // Check notification support
         const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
@@ -180,6 +181,7 @@
     let targetDate = $state("");
     let availableDays = $state<string[]>([]);
     let currentFitness = $state("");
+    let runsPerWeek = $state<number | null>(null);
     let planGenerationStrategy = $state<"auto" | "goal_based" | "legacy">("auto");
     let savingTraining = $state(false);
     let trainingMessage = $state("");
@@ -288,6 +290,7 @@
                             target_date: targetDate,
                             available_days: availableDays,
                             current_fitness: currentFitness,
+                            runs_per_week: runsPerWeek,
                             plan_generation_strategy: planGenerationStrategy,
                         }),
                     });
@@ -546,6 +549,22 @@
                         </div>
                         <p class="text-xs text-slate-500">
                             Days you can typically run
+                        </p>
+                    </div>
+
+                    <div class="space-y-2">
+                        <Label for="runs-per-week">Weekly Run Goal</Label>
+                        <input
+                            id="runs-per-week"
+                            type="number"
+                            min="1"
+                            max="7"
+                            placeholder={availableDays.length > 0 ? String(availableDays.length) : "3"}
+                            bind:value={runsPerWeek}
+                            class="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        />
+                        <p class="text-xs text-slate-500">
+                            How many runs do you aim to complete each week? Defaults to your available days ({availableDays.length || 0})
                         </p>
                     </div>
 

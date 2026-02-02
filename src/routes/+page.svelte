@@ -9,6 +9,7 @@
     import { Input } from "$lib/components/ui/input";
     import { Label } from "$lib/components/ui/label";
     import GarminAuthModal from "$lib/components/GarminAuthModal.svelte";
+    import WeeklyProgress from "$lib/components/WeeklyProgress.svelte";
     import {
         RefreshCw,
         Activity,
@@ -60,6 +61,10 @@
     // Delete run
     let deletingRuns = $state<Set<string>>(new Set());
 
+    // Reschedule states
+    let postponing = $state(false);
+    let skipping = $state(false);
+
     async function runNow(planId: string) {
         runningNow = true;
         syncMessage = "";
@@ -86,6 +91,62 @@
             syncMessage = "Network error";
         } finally {
             runningNow = false;
+        }
+    }
+
+    async function postponeRun(planId: string) {
+        postponing = true;
+        syncMessage = "";
+
+        try {
+            const res = await fetch("/api/plan/reschedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ planId, action: "move_tomorrow" }),
+            });
+
+            const result: { success: boolean; message?: string } =
+                await res.json();
+
+            if (result.success) {
+                syncMessage = result.message || "Run postponed to tomorrow!";
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                syncMessage = result.message || "Failed to postpone run";
+            }
+        } catch (err) {
+            console.error("Postpone error:", err);
+            syncMessage = "Network error";
+        } finally {
+            postponing = false;
+        }
+    }
+
+    async function skipRun(planId: string) {
+        skipping = true;
+        syncMessage = "";
+
+        try {
+            const res = await fetch("/api/plan/reschedule", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ planId, action: "skip" }),
+            });
+
+            const result: { success: boolean; message?: string } =
+                await res.json();
+
+            if (result.success) {
+                syncMessage = result.message || "Run skipped";
+                setTimeout(() => window.location.reload(), 1000);
+            } else {
+                syncMessage = result.message || "Failed to skip run";
+            }
+        } catch (err) {
+            console.error("Skip error:", err);
+            syncMessage = "Network error";
+        } finally {
+            skipping = false;
         }
     }
 
@@ -668,54 +729,87 @@
                 </div>
             {/if}
 
-            <!-- Goal Spotlight -->
+            <!-- Goal & Weekly Progress Combined -->
             {#if data.primaryGoal}
                 <Card class="mb-6 sm:mb-8 border-forest-500/30 bg-linear-to-br from-slate-900 to-slate-950">
                     <CardContent class="p-4 sm:p-6">
-                        <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                        <!-- Goal Header -->
+                        <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-forest-400 mb-3">
+                            <Target class="h-3 w-3" />
+                            Goal Spotlight
+                        </div>
+                        
+                        <div class="grid gap-6 sm:grid-cols-2">
+                            <!-- Goal Info -->
                             <div>
-                                <div class="flex items-center gap-2 text-xs uppercase tracking-wider text-forest-400">
-                                    <Target class="h-3 w-3" />
-                                    Goal Spotlight
-                                </div>
-                                <h2 class="mt-2 font-display text-2xl font-bold text-white">
+                                <h2 class="font-display text-2xl font-bold text-white">
                                     {data.primaryGoal.name}
                                 </h2>
                                 <p class="mt-1 text-sm text-slate-400">
-                                    Target date: {new Date(data.primaryGoal.target_date).toLocaleDateString("en-US", {
+                                    Target: {new Date(data.primaryGoal.target_date).toLocaleDateString("en-US", {
                                         month: "short",
                                         day: "numeric",
                                         year: "numeric"
                                     })}
                                 </p>
+                                <div class="mt-4">
+                                    <div class="flex justify-between text-sm mb-2">
+                                        <span class="text-slate-400">Overall Progress</span>
+                                        <span class="font-semibold text-forest-300">{data.primaryGoalProgress?.percentComplete ?? 0}%</span>
+                                    </div>
+                                    <div class="h-2 w-full rounded-full bg-slate-800">
+                                        <div
+                                            class="h-2 rounded-full bg-forest-500 transition-all"
+                                            style={`width: ${data.primaryGoalProgress?.percentComplete ?? 0}%`}
+                                        ></div>
+                                    </div>
+                                    <div class="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                        <span>{data.primaryGoalProgress?.runsCompleted ?? 0}/{data.primaryGoalProgress?.totalRuns ?? 0} runs</span>
+                                        <span>•</span>
+                                        <span>{data.primaryGoalProgress?.weeksRemaining ?? 0} weeks left</span>
+                                        <span>•</span>
+                                        <span>Longest: {data.primaryGoalProgress?.longestRun ?? 0} km</span>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="text-right">
-                                <p class="text-sm text-slate-400">Plan progress</p>
-                                <p class="text-3xl font-semibold text-forest-300">
-                                    {data.primaryGoalProgress?.percentComplete ?? 0}%
-                                </p>
-                                <p class="text-xs text-slate-500">
-                                    {data.primaryGoalProgress?.weeksRemaining ?? 0} weeks remaining
-                                </p>
-                            </div>
+
+                            <!-- Weekly Progress -->
+                            {#if data.weeklyProgress}
+                                <div class="border-l border-slate-700/50 pl-6">
+                                    <h3 class="text-sm font-medium text-slate-300">This Week</h3>
+                                    <div class="mt-1 flex items-baseline gap-2">
+                                        <span class="font-display text-2xl font-bold text-white">
+                                            {data.weeklyProgress.completed}/{data.weeklyProgress.target}
+                                        </span>
+                                        <span class="text-sm text-slate-400">runs</span>
+                                    </div>
+                                    <div class="mt-3 h-2 w-full rounded-full bg-slate-700">
+                                        <div
+                                            class="h-2 rounded-full bg-forest-600 transition-all"
+                                            style="width: {Math.min(100, Math.round((data.weeklyProgress.completed / data.weeklyProgress.target) * 100))}%"
+                                        ></div>
+                                    </div>
+                                    {#if data.weeklyProgress.completed >= data.weeklyProgress.target}
+                                        <p class="mt-3 text-sm text-forest-400">
+                                            ✓ Weekly goal reached!
+                                        </p>
+                                    {:else if data.weeklyProgress.completed > 0}
+                                        <p class="mt-3 text-sm text-slate-400">
+                                            {data.weeklyProgress.target - data.weeklyProgress.completed} more to go
+                                        </p>
+                                    {:else}
+                                        <p class="mt-3 text-sm text-slate-400">
+                                            Start your first run this week
+                                        </p>
+                                    {/if}
+                                </div>
+                            {/if}
                         </div>
-                        <div class="mt-4 h-2 w-full rounded-full bg-slate-800">
-                            <div
-                                class="h-2 rounded-full bg-forest-500 transition-all"
-                                style={`width: ${data.primaryGoalProgress?.percentComplete ?? 0}%`}
-                            ></div>
-                        </div>
-                        <div class="mt-4 flex flex-wrap items-center gap-3 text-sm text-slate-400">
-                            <span>
-                                {data.primaryGoalProgress?.runsCompleted ?? 0}/{data.primaryGoalProgress?.totalRuns ?? 0} runs completed
-                            </span>
-                            <span>•</span>
-                            <span>Longest run: {data.primaryGoalProgress?.longestRun ?? 0} km</span>
-                        </div>
-                        <div class="mt-4">
+
+                        <div class="mt-4 pt-4 border-t border-slate-700/50">
                             <a href="/goals">
                                 <Button variant="outline" size="sm">
-                                    View Goal Plan
+                                    View Full Goal Plan
                                 </Button>
                             </a>
                         </div>
@@ -790,7 +884,7 @@
                                         onclick={() => runNow(data.nextRun!.id)}
                                         variant="default"
                                         size="sm"
-                                        disabled={runningNow}
+                                        disabled={runningNow || postponing || skipping}
                                         class="bg-forest-600 hover:bg-forest-700 text-base"
                                     >
                                         {#if runningNow}
@@ -801,6 +895,33 @@
                                         {:else}
                                             <Zap class="h-4 w-4" />
                                             Do This Today
+                                        {/if}
+                                    </Button>
+                                    <Button
+                                        onclick={() => postponeRun(data.nextRun!.id)}
+                                        variant="outline"
+                                        size="sm"
+                                        disabled={runningNow || postponing || skipping}
+                                        class="border-slate-600 text-slate-300 hover:bg-slate-700"
+                                    >
+                                        {#if postponing}
+                                            <RefreshCw class="h-4 w-4 animate-spin" />
+                                            Moving...
+                                        {:else}
+                                            Postpone to Tomorrow
+                                        {/if}
+                                    </Button>
+                                    <Button
+                                        onclick={() => skipRun(data.nextRun!.id)}
+                                        variant="ghost"
+                                        size="sm"
+                                        disabled={runningNow || postponing || skipping}
+                                        class="text-slate-400 hover:text-slate-200"
+                                    >
+                                        {#if skipping}
+                                            <RefreshCw class="h-4 w-4 animate-spin" />
+                                        {:else}
+                                            Skip
                                         {/if}
                                     </Button>
                                 </div>
@@ -952,7 +1073,7 @@
                         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                             {#each data.upcomingPlans as plan}
                                 <div
-                                    class="rounded-xl border border-slate-700/50 bg-slate-800/50 p-3 sm:p-4"
+                                    class="group rounded-xl border border-slate-700/50 bg-slate-800/50 p-3 sm:p-4"
                                 >
                                     <div
                                         class="flex items-center justify-between"
@@ -975,102 +1096,32 @@
                                     <p class="mt-1 text-xs text-slate-500">
                                         {plan.dateFormatted}
                                     </p>
+                                    <div class="mt-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                                        <button
+                                            onclick={() => runNow(plan.id)}
+                                            class="text-xs text-forest-400 hover:text-forest-300"
+                                            disabled={runningNow || postponing || skipping}
+                                        >
+                                            Do today
+                                        </button>
+                                        <button
+                                            onclick={() => postponeRun(plan.id)}
+                                            class="text-xs text-slate-400 hover:text-slate-300"
+                                            disabled={runningNow || postponing || skipping}
+                                        >
+                                            Postpone
+                                        </button>
+                                        <button
+                                            onclick={() => skipRun(plan.id)}
+                                            class="text-xs text-slate-500 hover:text-slate-400"
+                                            disabled={runningNow || postponing || skipping}
+                                        >
+                                            Skip
+                                        </button>
+                                    </div>
                                 </div>
                             {/each}
                         </div>
-                    </CardContent>
-                </Card>
-            {/if}
-
-            <!-- Active Goal Card -->
-            {#if data.primaryGoal && data.primaryGoalProgress}
-                <Card
-                    class="mb-6 sm:mb-8 border-forest-800/50 bg-linear-to-br from-forest-900 to-slate-900"
-                >
-                    <CardHeader>
-                        <CardTitle class="flex items-center gap-2">
-                            <Target class="h-5 w-5 text-forest-400" />
-                            <span>{data.primaryGoal.name}</span>
-                        </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <div class="mb-4">
-                            <div class="mb-1 flex justify-between text-sm">
-                                <span class="text-slate-300"
-                                    >Progress to Goal</span
-                                >
-                                <span class="font-semibold text-white"
-                                    >{data.primaryGoalProgress
-                                        .percentComplete}%</span
-                                >
-                            </div>
-                            <div class="h-2 w-full rounded-full bg-slate-700">
-                                <div
-                                    class="h-full rounded-full bg-gradient-to-r from-forest-600 to-forest-500"
-                                    style="width: {data.primaryGoalProgress
-                                        .percentComplete}%"
-                                ></div>
-                            </div>
-                        </div>
-
-                        <div class="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                                <div class="text-slate-400">Target Date</div>
-                                <div class="font-semibold text-white">
-                                    {new Date(
-                                        data.primaryGoal.target_date,
-                                    ).toLocaleDateString("en-US", {
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                    })}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">
-                                    Weeks Remaining
-                                </div>
-                                <div class="font-semibold text-white">
-                                    {data.primaryGoalProgress.weeksRemaining}
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">Longest Run</div>
-                                <div class="font-semibold text-white">
-                                    {data.primaryGoalProgress.longestRun.toFixed(
-                                        1,
-                                    )}km
-                                </div>
-                            </div>
-                            <div>
-                                <div class="text-slate-400">Status</div>
-                                <div
-                                    class="font-semibold {data
-                                        .primaryGoalProgress.status ===
-                                    'on_track'
-                                        ? 'text-green-400'
-                                        : data.primaryGoalProgress.status ===
-                                            'ahead'
-                                          ? 'text-blue-400'
-                                          : 'text-yellow-400'}"
-                                >
-                                    {data.primaryGoalProgress.status ===
-                                    "on_track"
-                                        ? "On track ✓"
-                                        : data.primaryGoalProgress.status ===
-                                            "ahead"
-                                          ? "Ahead ⚡"
-                                          : "Behind ⚠️"}
-                                </div>
-                            </div>
-                        </div>
-
-                        <a
-                            href="/goals"
-                            class="mt-4 inline-block text-forest-400 hover:text-forest-300 hover:underline text-sm"
-                        >
-                            View all goals →
-                        </a>
                     </CardContent>
                 </Card>
             {/if}

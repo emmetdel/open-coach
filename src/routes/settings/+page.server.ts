@@ -16,6 +16,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		targetDate,
 		availableDays,
 		currentFitness,
+		runsPerWeek,
 		pushEnabled,
 		garminConnected,
 		planGenerationStrategy
@@ -25,6 +26,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		getSetting(db, userId, SETTING_KEYS.TARGET_DATE),
 		getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS),
 		getSetting(db, userId, SETTING_KEYS.CURRENT_FITNESS),
+		getSetting(db, userId, SETTING_KEYS.RUNS_PER_WEEK),
 		getSetting(db, userId, SETTING_KEYS.PUSH_ENABLED),
 		hasValidTokens(db, userId),
 		getSetting(db, userId, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
@@ -50,6 +52,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 			targetDate: targetDate || '',
 			availableDays: daysArray,
 			currentFitness: currentFitness || '',
+			runsPerWeek: runsPerWeek ? parseInt(runsPerWeek, 10) : null,
 			planGenerationStrategy: planGenerationStrategy || 'auto',
 			
 			// Notifications

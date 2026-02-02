@@ -46,7 +46,8 @@ export async function generateGoalBasedPlan(
 ): Promise<PlanGenerationResult> {
   // 1. Calculate Training Timeline
   const today = new Date();
-  const planStart = getNextMonday(today);
+  // Start the plan from this week's Monday (or today if it's early in the week)
+  const planStart = getThisWeekMonday(today);
   const goalDate = new Date(input.goalDate);
   const weeksAvailable = Math.floor(
     (goalDate.getTime() - planStart.getTime()) / (7 * 24 * 60 * 60 * 1000),
@@ -59,9 +60,12 @@ export async function generateGoalBasedPlan(
   // 2. Assess Current Fitness Level
   const recentVolume = calculateAverageWeeklyVolume(input.recentRuns);
   const longestRun = findLongestRun(input.recentRuns);
+  
+  // Conservative defaults for complete beginners - start very easy
+  // 6km/week is about 2x 3km runs, achievable for most beginners
   const currentCapacity = {
-    weeklyVolume: recentVolume || 10, // Default 10km/week if no data
-    longestDistance: longestRun || 3, // Default 3km if no data
+    weeklyVolume: recentVolume || 6, // Default 6km/week if no data (beginner-friendly)
+    longestDistance: longestRun || 2, // Default 2km if no data (conservative start)
   };
 
   // 3. Calculate Required Progression
@@ -220,7 +224,7 @@ function calculateWeekVolume(
 
   const maxIncrease = Math.max(1, currentWeeklyVolume * 0.1);
   const capped = Math.min(volume, currentWeeklyVolume + maxIncrease);
-  return Math.max(capped, 10); // Minimum 10km per week
+  return Math.max(capped, 4); // Minimum 4km per week (beginner-friendly)
 }
 
 /**
@@ -251,8 +255,11 @@ function distributeVolumeAcrossDays(
   }
 
   const remainingVolume = Math.max(0, targetVolume - longRunDistance);
-  const easyRunDistance =
+  // Easy runs should never exceed the long run distance - that would be backwards
+  // Also cap at 5km max for easy runs to keep them truly "easy"
+  const rawEasyDistance =
     daysPerWeek > 1 ? remainingVolume / (daysPerWeek - 1) : 0;
+  const easyRunDistance = Math.min(rawEasyDistance, longRunDistance, 5);
 
   // Map day names to offsets from week start (Monday)
   const dayOffsets: Record<string, number> = {
@@ -390,13 +397,25 @@ function getWeekStartDate(startDate: Date, weekNumber: number): Date {
   return weekStart;
 }
 
-function getNextMonday(date: Date): Date {
-  const day = date.getDay();
-  const daysUntilMonday = day === 0 ? 1 : (8 - day) % 7 || 7;
-  const nextMonday = new Date(date);
-  nextMonday.setDate(date.getDate() + daysUntilMonday);
-  nextMonday.setHours(0, 0, 0, 0);
-  return nextMonday;
+/**
+ * Get the Monday of the current week
+ * If today is Sunday, returns next Monday (start of next week)
+ * Otherwise returns the Monday of the current week
+ */
+function getThisWeekMonday(date: Date): Date {
+  const day = date.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const monday = new Date(date);
+  
+  if (day === 0) {
+    // Sunday - start next week (tomorrow)
+    monday.setDate(date.getDate() + 1);
+  } else {
+    // Mon-Sat - go back to this week's Monday
+    monday.setDate(date.getDate() - (day - 1));
+  }
+  
+  monday.setHours(0, 0, 0, 0);
+  return monday;
 }
 
 function normalizeDayName(day: string): string | null {

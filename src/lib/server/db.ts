@@ -114,6 +114,7 @@ export const SETTING_KEYS = {
   TARGET_DATE: "target_date",
   AVAILABLE_DAYS: "available_days",
   CURRENT_FITNESS: "current_fitness",
+  RUNS_PER_WEEK: "runs_per_week",
   // Notifications
   NOTIFICATION_EMAIL: "notification_email",
   PUSH_ENABLED: "push_enabled",

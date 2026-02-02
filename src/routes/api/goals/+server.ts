@@ -50,26 +50,17 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       );
     }
 
-    if (goalData.goal_type === 'time_goal') {
-      if (!goalData.target_duration_minutes || goalData.target_duration_minutes < 10) {
-        return json(
-          { success: false, error: 'Target duration must be at least 10 minutes' },
-          { status: 400 }
-        );
-      }
-    } else {
-      if (!goalData.target_distance_km) {
-        return json(
-          { success: false, error: 'Target distance is required' },
-          { status: 400 }
-        );
-      }
-      if (goalData.target_distance_km < 1 || goalData.target_distance_km > 42.2) {
-        return json(
-          { success: false, error: 'Target distance must be between 1 and 42.2 km' },
-          { status: 400 }
-        );
-      }
+    if (!goalData.target_distance_km) {
+      return json(
+        { success: false, error: 'Target distance is required' },
+        { status: 400 }
+      );
+    }
+    if (goalData.target_distance_km < 1 || goalData.target_distance_km > 42.2) {
+      return json(
+        { success: false, error: 'Target distance must be between 1 and 42.2 km' },
+        { status: 400 }
+      );
     }
 
     const goalId = await createGoal(db, userId, {

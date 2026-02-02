@@ -23,10 +23,20 @@
 	let currentMonth = $state(new Date());
 	let draggedRunId = $state<string | null>(null);
 
-	// Get runs for a specific date
+	// Get runs for a specific date (deduplicated by ID)
 	function getRunsForDate(date: Date): CalendarRun[] {
 		const dateStr = date.toISOString().split('T')[0];
-		return runs.filter((r) => r.date === dateStr);
+		const matchingRuns = runs.filter((r) => r.date === dateStr);
+		
+		// Deduplicate by ID in case of data issues
+		const uniqueRuns = matchingRuns.reduce((acc, run) => {
+			if (!acc.find(r => r.id === run.id)) {
+				acc.push(run);
+			}
+			return acc;
+		}, [] as CalendarRun[]);
+		
+		return uniqueRuns;
 	}
 
 	// Check if date is today
@@ -211,11 +221,16 @@
 							)} {run.status === 'Pending' ? 'cursor-move' : 'cursor-pointer hover:ring-2 hover:ring-white/50'}"
 							title="{run.status === 'Completed' ? '✓ Completed - Click to undo' : run.status === 'Pending' ? 'Drag to reschedule' : 'Overdue'}"
 						>
-							<div class="flex items-center gap-1">
-								{#if run.status === 'Completed'}
-									<CheckCircle2 class="h-3 w-3" />
+							<div class="flex items-center justify-between gap-1">
+								<div class="flex items-center gap-1 min-w-0">
+									{#if run.status === 'Completed'}
+										<CheckCircle2 class="h-3 w-3 shrink-0" />
+									{/if}
+									<span class="truncate">{run.type}</span>
+								</div>
+								{#if run.distance}
+									<span class="text-[10px] opacity-70 shrink-0">{run.distance}</span>
 								{/if}
-								<span class="truncate">{run.type}</span>
 							</div>
 						</button>
 					{/each}

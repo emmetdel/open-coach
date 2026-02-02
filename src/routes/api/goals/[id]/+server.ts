@@ -68,15 +68,6 @@ export const PATCH: RequestHandler = async ({ locals, params, request }) => {
       }
     }
 
-    if (updates.target_duration_minutes !== undefined) {
-      if (updates.target_duration_minutes < 10) {
-        return json(
-          { success: false, error: 'Target duration must be at least 10 minutes' },
-          { status: 400 }
-        );
-      }
-    }
-
     await updateGoal(db, userId, params.id, updates);
 
     return json({

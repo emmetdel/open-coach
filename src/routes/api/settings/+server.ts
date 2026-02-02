@@ -11,6 +11,7 @@ export interface SettingsPayload {
 	target_date?: string;
 	available_days?: string[];
 	current_fitness?: string;
+	runs_per_week?: number;
 	notification_email?: string;
 	email_enabled?: boolean;
 	notify_on_sync?: boolean;
@@ -27,6 +28,7 @@ export interface SettingsResponse {
 	target_date: string | null;
 	available_days: string[] | null;
 	current_fitness: string | null;
+	runs_per_week: number | null;
 	notification_email: string | null;
 	push_enabled: boolean;
 	email_enabled: boolean;
@@ -53,6 +55,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		targetDate,
 		availableDays,
 		currentFitness,
+		runsPerWeek,
 		notificationEmail,
 		pushEnabled,
 		emailEnabled,
@@ -67,6 +70,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		getSetting(db, userId, SETTING_KEYS.TARGET_DATE),
 		getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS),
 		getSetting(db, userId, SETTING_KEYS.CURRENT_FITNESS),
+		getSetting(db, userId, SETTING_KEYS.RUNS_PER_WEEK),
 		getSetting(db, userId, SETTING_KEYS.NOTIFICATION_EMAIL),
 		getSetting(db, userId, SETTING_KEYS.PUSH_ENABLED),
 		getSetting(db, userId, SETTING_KEYS.EMAIL_ENABLED),
@@ -85,6 +89,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		target_date: targetDate,
 		available_days: availableDays ? JSON.parse(availableDays) : null,
 		current_fitness: currentFitness,
+		runs_per_week: runsPerWeek ? parseInt(runsPerWeek, 10) : null,
 		notification_email: notificationEmail,
 		push_enabled: pushEnabled === 'true',
 		email_enabled: emailEnabled === 'true',
@@ -217,6 +222,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	}
 	if (payload.plan_generation_strategy) {
 		settingsToSave[SETTING_KEYS.PLAN_GENERATION_STRATEGY] = payload.plan_generation_strategy;
+	}
+	if (payload.runs_per_week !== undefined) {
+		settingsToSave[SETTING_KEYS.RUNS_PER_WEEK] = String(payload.runs_per_week);
 	}
 
 	// Return validation errors if any

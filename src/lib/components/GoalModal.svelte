@@ -83,10 +83,7 @@
             }
         }
 
-        if (
-            formData.goal_type !== "time_goal" &&
-            (!formData.target_distance_km || formData.target_distance_km < 1)
-        ) {
+        if (!formData.target_distance_km || formData.target_distance_km < 1) {
             errors.target_distance_km = "Target distance is required";
         } else if (
             formData.target_distance_km &&
@@ -201,7 +198,6 @@
                     >
                         <option value="distance">Distance Goal</option>
                         <option value="race">Race Event</option>
-                        <option value="time_goal">Time Goal</option>
                     </select>
                 </div>
 
@@ -233,57 +229,32 @@
                 </div>
 
                 <!-- Target Distance -->
-                {#if formData.goal_type !== "time_goal"}
-                    <div class="mb-4">
-                        <Label
-                            for="target_distance_km"
-                            class="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                            Target Distance (km) *
-                        </Label>
-                        <Input
-                            id="target_distance_km"
-                            type="number"
-                            bind:value={formData.target_distance_km}
-                            min="1"
-                            max="42.2"
-                            step="0.1"
-                            class="bg-slate-700 text-white"
-                        />
-                        {#if errors.target_distance_km}
-                            <p class="mt-1 text-sm text-red-400">
-                                {errors.target_distance_km}
-                            </p>
-                        {:else}
-                            <p class="mt-1 text-xs text-slate-400">
-                                Range: 1 - 42.2 km
-                            </p>
-                        {/if}
-                    </div>
-                {/if}
-
-                <!-- Target Time (for time goals) -->
-                {#if formData.goal_type === "time_goal"}
-                    <div class="mb-4">
-                        <Label
-                            for="target_duration_minutes"
-                            class="mb-2 block text-sm font-medium text-slate-300"
-                        >
-                            Target Time (minutes)
-                        </Label>
-                        <Input
-                            id="target_duration_minutes"
-                            type="number"
-                            bind:value={formData.target_duration_minutes}
-                            min="1"
-                            class="bg-slate-700 text-white"
-                            placeholder="e.g., 25 for 25 minutes"
-                        />
-                        <p class="mt-1 text-xs text-slate-400">
-                            Optional: Target time to complete the distance
+                <div class="mb-4">
+                    <Label
+                        for="target_distance_km"
+                        class="mb-2 block text-sm font-medium text-slate-300"
+                    >
+                        Target Distance (km) *
+                    </Label>
+                    <Input
+                        id="target_distance_km"
+                        type="number"
+                        bind:value={formData.target_distance_km}
+                        min="1"
+                        max="42.2"
+                        step="0.1"
+                        class="bg-slate-700 text-white"
+                    />
+                    {#if errors.target_distance_km}
+                        <p class="mt-1 text-sm text-red-400">
+                            {errors.target_distance_km}
                         </p>
-                    </div>
-                {/if}
+                    {:else}
+                        <p class="mt-1 text-xs text-slate-400">
+                            Range: 1 - 42.2 km
+                        </p>
+                    {/if}
+                </div>
 
                 <!-- Description -->
                 <div class="mb-6">

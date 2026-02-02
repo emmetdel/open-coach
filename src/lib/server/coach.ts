@@ -524,14 +524,21 @@ export async function generateWeeklyPlan(
   };
 }
 
-// Helper: Get next Monday's date
+// Helper: Get this week's Monday (or next Monday if today is Sunday)
 function getNextMonday(): string {
   const today = new Date();
-  const dayOfWeek = today.getDay();
-  const daysUntilMonday = dayOfWeek === 0 ? 1 : (8 - dayOfWeek) % 7 || 7;
-  const nextMonday = new Date(today);
-  nextMonday.setDate(today.getDate() + daysUntilMonday);
-  return nextMonday.toISOString().split("T")[0];
+  const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+  const monday = new Date(today);
+  
+  if (dayOfWeek === 0) {
+    // Sunday - start next week (tomorrow)
+    monday.setDate(today.getDate() + 1);
+  } else {
+    // Mon-Sat - go back to this week's Monday
+    monday.setDate(today.getDate() - (dayOfWeek - 1));
+  }
+  
+  return monday.toISOString().split("T")[0];
 }
 
 // Helper: Add days to a date string
