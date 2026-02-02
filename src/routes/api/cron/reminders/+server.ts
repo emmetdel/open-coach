@@ -4,7 +4,7 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { sendRunReminders } from '$lib/server/reminders';
-import { hasCompletedSetup } from '$lib/server/db';
+import { hasCompletedSetup, listUsers } from '$lib/server/db';
 import { isCronAuthorized } from '$lib/server/cronAuth';
 
 export const GET: RequestHandler = async ({ locals, url, request }) => {
@@ -18,30 +18,29 @@ export const GET: RequestHandler = async ({ locals, url, request }) => {
 		return json({ error: 'Unauthorized' }, { status: 401 });
 	}
 
-	// Check if setup is complete
-	const isSetup = await hasCompletedSetup(db);
-	if (!isSetup) {
-		return json({
-			success: false,
-			message: 'Setup not complete, skipping reminders'
-		});
-	}
-
 	// Determine if morning or evening based on time or query param
 	const hour = new Date().getUTCHours();
 	const forceType = url.searchParams.get('type') as 'morning' | 'evening' | null;
 	const reminderType = forceType || (hour < 12 ? 'morning' : 'evening');
 
 	try {
-		const result = await sendRunReminders(db, reminderType);
+		const users = await listUsers(db);
+		let sent = 0;
 
-		console.log(`${reminderType} reminders: sent ${result.sent}`);
+		for (const user of users) {
+			const isSetup = await hasCompletedSetup(db, user.id);
+			if (!isSetup) {
+				continue;
+			}
+			const result = await sendRunReminders(db, user.id, reminderType);
+			sent += result.sent;
+		}
 
 		return json({
 			success: true,
 			type: reminderType,
-			sent: result.sent,
-			message: `Sent ${result.sent} ${reminderType} reminder(s)`
+			sent,
+			message: `Sent ${sent} ${reminderType} reminder(s)`
 		});
 	} catch (err) {
 		console.error('Reminder cron failed:', err);

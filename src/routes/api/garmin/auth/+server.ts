@@ -11,9 +11,10 @@ import { setSetting, getSetting, getGarminCredentials, SETTING_KEYS } from "$lib
 // Login to Garmin and save tokens
 export const POST: RequestHandler = async ({ request, locals }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, "Database not available");
   }
+  const userId = locals.user.id;
 
   try {
     // Get credentials from request body or fallback to env/db
@@ -24,7 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
     // If not provided in body, try env/db
     if (!email || !password) {
-      const creds = await getGarminCredentials(db);
+      const creds = await getGarminCredentials(db, userId);
       if (creds) {
         email = creds.email;
         password = creds.password;
@@ -69,19 +70,21 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     // Save tokens to database
     await setSetting(
       db,
+      userId,
       SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
       JSON.stringify(oauth1),
     );
     await setSetting(
       db,
+      userId,
       SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
       JSON.stringify(oauth2),
     );
 
     // Also save credentials to DB if they came from body (not env)
     if (body.email && body.password) {
-      await setSetting(db, SETTING_KEYS.GARMIN_EMAIL, body.email);
-      await setSetting(db, SETTING_KEYS.GARMIN_PASSWORD, body.password);
+      await setSetting(db, userId, SETTING_KEYS.GARMIN_EMAIL, body.email);
+      await setSetting(db, userId, SETTING_KEYS.GARMIN_PASSWORD, body.password);
     }
 
     // Get user profile for confirmation
@@ -145,11 +148,16 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 // Check auth status
 export const GET: RequestHandler = async ({ locals }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, "Database not available");
   }
+  const userId = locals.user.id;
 
-  const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
+  const oauth2Str = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
+  );
 
   if (!oauth2Str) {
     return json({
@@ -160,7 +168,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 
   // Try to validate tokens by making a simple API call
   try {
-    const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
+    const oauth1Str = await getSetting(
+      db,
+      userId,
+      SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
+    );
     if (!oauth1Str) {
       return json({
         authenticated: false,
@@ -172,7 +184,7 @@ export const GET: RequestHandler = async ({ locals }) => {
     const oauth2 = JSON.parse(oauth2Str);
 
     // Get stored credentials - GarminConnect constructor requires them
-    const creds = await getGarminCredentials(db);
+    const creds = await getGarminCredentials(db, userId);
     if (!creds) {
       return json({
         authenticated: false,

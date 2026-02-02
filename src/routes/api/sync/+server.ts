@@ -25,16 +25,20 @@ export interface SyncResult {
 }
 
 // Sync a single run: insert to DB, get AI feedback, and notify
-async function syncRun(db: LocalDatabase, run: NormalizedRun): Promise<void> {
+async function syncRun(
+  db: LocalDatabase,
+  userId: string,
+  run: NormalizedRun,
+): Promise<void> {
   // Insert the run first (without AI feedback)
-  await insertRun(db, {
+  await insertRun(db, userId, {
     ...run,
     ai_feedback: null,
   });
 
   // Smart matching: Mark nearest pending plan as completed
   try {
-    const matched = await matchRunToPlan(db, run.date);
+    const matched = await matchRunToPlan(db, userId, run.date);
     if (!matched) {
       console.log(`ℹ No training plan found within 4 days of ${run.date}`);
     }
@@ -45,8 +49,8 @@ async function syncRun(db: LocalDatabase, run: NormalizedRun): Promise<void> {
   // Get AI feedback
   let feedback: string | null = null;
   try {
-    feedback = await analyzeRun(db, run);
-    await updateRunFeedback(db, run.garmin_activity_id, feedback);
+    feedback = await analyzeRun(db, userId, run);
+    await updateRunFeedback(db, userId, run.garmin_activity_id, feedback);
   } catch (err) {
     console.error(
       "Failed to get AI feedback for run:",
@@ -57,9 +61,13 @@ async function syncRun(db: LocalDatabase, run: NormalizedRun): Promise<void> {
 
   // Send notification
   try {
-    const savedRun = await getRunByActivityId(db, run.garmin_activity_id);
+    const savedRun = await getRunByActivityId(
+      db,
+      userId,
+      run.garmin_activity_id,
+    );
     if (savedRun) {
-      await notifyRunSynced(db, savedRun);
+      await notifyRunSynced(db, userId, savedRun);
     }
   } catch (err) {
     console.error("Failed to send notification:", err);
@@ -68,12 +76,13 @@ async function syncRun(db: LocalDatabase, run: NormalizedRun): Promise<void> {
 
 export const POST: RequestHandler = async ({ locals }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, "Database not available");
   }
+  const userId = locals.user.id;
 
   // Check if setup is complete
-  const isSetup = await hasCompletedSetup(db);
+  const isSetup = await hasCompletedSetup(db, userId);
   if (!isSetup) {
     return json({
       success: false,
@@ -84,10 +93,10 @@ export const POST: RequestHandler = async ({ locals }) => {
 
   try {
     // Fetch recent runs from Garmin
-    const recentRuns = await fetchRecentRuns(db, 10);
+    const recentRuns = await fetchRecentRuns(db, userId, 10);
 
     // Get existing activity IDs to avoid duplicates
-    const existingIds = await getExistingActivityIds(db);
+    const existingIds = await getExistingActivityIds(db, userId);
 
     // Filter to only new runs
     const newRuns = recentRuns.filter(
@@ -104,14 +113,14 @@ export const POST: RequestHandler = async ({ locals }) => {
 
     // Sync each new run
     for (const run of newRuns) {
-      await syncRun(db, run);
+      await syncRun(db, userId, run);
     }
 
     // Use smart matching to auto-complete workouts
-    const matchResult = await smartMatchRuns(db);
+    const matchResult = await smartMatchRuns(db, userId);
 
     // Check weekly progress
-    const weekAnalysis = await analyzeWeeklyProgress(db);
+    const weekAnalysis = await analyzeWeeklyProgress(db, userId);
 
     // Build success message
     let message = `Synced ${newRuns.length} new run${newRuns.length > 1 ? "s" : ""}`;
@@ -154,11 +163,12 @@ export const POST: RequestHandler = async ({ locals }) => {
 // GET endpoint to check sync status
 export const GET: RequestHandler = async ({ locals }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, "Database not available");
   }
+  const userId = locals.user.id;
 
-  const isSetup = await hasCompletedSetup(db);
+  const isSetup = await hasCompletedSetup(db, userId);
 
   return json({
     ready: isSetup,

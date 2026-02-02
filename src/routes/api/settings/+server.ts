@@ -40,9 +40,10 @@ export interface SettingsResponse {
 // GET: Load current settings (passwords redacted)
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const [
 		garminEmail,
@@ -59,22 +60,22 @@ export const GET: RequestHandler = async ({ locals }) => {
 		notifyOnMissed,
 		planGenerationStrategy
 	] = await Promise.all([
-		getSetting(db, SETTING_KEYS.GARMIN_EMAIL),
-		getSetting(db, SETTING_KEYS.GARMIN_PASSWORD),
-		getSetting(db, SETTING_KEYS.OPENROUTER_KEY),
-		getSetting(db, SETTING_KEYS.OPENROUTER_MODEL),
-		getSetting(db, SETTING_KEYS.TARGET_DATE),
-		getSetting(db, SETTING_KEYS.AVAILABLE_DAYS),
-		getSetting(db, SETTING_KEYS.CURRENT_FITNESS),
-		getSetting(db, SETTING_KEYS.NOTIFICATION_EMAIL),
-		getSetting(db, SETTING_KEYS.PUSH_ENABLED),
-		getSetting(db, SETTING_KEYS.EMAIL_ENABLED),
-		getSetting(db, SETTING_KEYS.NOTIFY_ON_SYNC),
-		getSetting(db, SETTING_KEYS.NOTIFY_ON_MISSED),
-		getSetting(db, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
+		getSetting(db, userId, SETTING_KEYS.GARMIN_EMAIL),
+		getSetting(db, userId, SETTING_KEYS.GARMIN_PASSWORD),
+		getSetting(db, userId, SETTING_KEYS.OPENROUTER_KEY),
+		getSetting(db, userId, SETTING_KEYS.OPENROUTER_MODEL),
+		getSetting(db, userId, SETTING_KEYS.TARGET_DATE),
+		getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS),
+		getSetting(db, userId, SETTING_KEYS.CURRENT_FITNESS),
+		getSetting(db, userId, SETTING_KEYS.NOTIFICATION_EMAIL),
+		getSetting(db, userId, SETTING_KEYS.PUSH_ENABLED),
+		getSetting(db, userId, SETTING_KEYS.EMAIL_ENABLED),
+		getSetting(db, userId, SETTING_KEYS.NOTIFY_ON_SYNC),
+		getSetting(db, userId, SETTING_KEYS.NOTIFY_ON_MISSED),
+		getSetting(db, userId, SETTING_KEYS.PLAN_GENERATION_STRATEGY)
 	]);
 
-	const isComplete = await hasCompletedSetup(db);
+	const isComplete = await hasCompletedSetup(db, userId);
 
 	return json({
 		garmin_email: garminEmail,
@@ -98,9 +99,10 @@ export const GET: RequestHandler = async ({ locals }) => {
 // DELETE: Reset settings (clear Garmin credentials)
 export const DELETE: RequestHandler = async ({ url, locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const what = url.searchParams.get('what') || 'garmin';
 
@@ -137,8 +139,8 @@ export const DELETE: RequestHandler = async ({ url, locals }) => {
 	if (keysToDelete.length > 0) {
 		const placeholders = keysToDelete.map(() => '?').join(',');
 		await db
-			.prepare(`DELETE FROM user_settings WHERE key IN (${placeholders})`)
-			.bind(...keysToDelete)
+			.prepare(`DELETE FROM user_settings WHERE user_id = ? AND key IN (${placeholders})`)
+			.bind(userId, ...keysToDelete)
 			.run();
 	}
 
@@ -152,9 +154,10 @@ export const DELETE: RequestHandler = async ({ url, locals }) => {
 // POST: Save settings
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const payload = (await request.json()) as SettingsPayload;
 	const settingsToSave: Record<string, string> = {};
@@ -229,7 +232,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 
 	// Save settings
 	if (Object.keys(settingsToSave).length > 0) {
-		await setSettings(db, settingsToSave);
+		await setSettings(db, userId, settingsToSave);
 	}
 
 	return json({

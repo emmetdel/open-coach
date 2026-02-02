@@ -12,13 +12,14 @@ interface UpdateRunPayload {
 // GET: Get a single run
 export const GET: RequestHandler = async ({ params, locals }) => {
 	const db = locals.db as LocalDatabase;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const run = await db
-		.prepare('SELECT * FROM runs WHERE garmin_activity_id = ?')
-		.bind(params.id)
+		.prepare('SELECT * FROM runs WHERE user_id = ? AND garmin_activity_id = ?')
+		.bind(userId, params.id)
 		.first();
 
 	if (!run) {
@@ -31,17 +32,18 @@ export const GET: RequestHandler = async ({ params, locals }) => {
 // PATCH: Update a run
 export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 	const db = locals.db as LocalDatabase;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const payload: UpdateRunPayload = await request.json();
 	const runId = params.id;
 
 	// Check if run exists
 	const existing = await db
-		.prepare('SELECT * FROM runs WHERE garmin_activity_id = ?')
-		.bind(runId)
+		.prepare('SELECT * FROM runs WHERE user_id = ? AND garmin_activity_id = ?')
+		.bind(userId, runId)
 		.first();
 
 	if (!existing) {
@@ -50,26 +52,26 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 
 	// Build update query dynamically based on provided fields
 	if (payload.date) {
-		await db.prepare('UPDATE runs SET date = ? WHERE garmin_activity_id = ?')
-			.bind(payload.date, runId)
+		await db.prepare('UPDATE runs SET date = ? WHERE user_id = ? AND garmin_activity_id = ?')
+			.bind(payload.date, userId, runId)
 			.run();
 	}
 
 	if (payload.distance_km !== undefined) {
-		await db.prepare('UPDATE runs SET distance_meters = ? WHERE garmin_activity_id = ?')
-			.bind(Math.round(payload.distance_km * 1000), runId)
+		await db.prepare('UPDATE runs SET distance_meters = ? WHERE user_id = ? AND garmin_activity_id = ?')
+			.bind(Math.round(payload.distance_km * 1000), userId, runId)
 			.run();
 	}
 
 	if (payload.duration_minutes !== undefined) {
-		await db.prepare('UPDATE runs SET duration_seconds = ? WHERE garmin_activity_id = ?')
-			.bind(Math.round(payload.duration_minutes * 60), runId)
+		await db.prepare('UPDATE runs SET duration_seconds = ? WHERE user_id = ? AND garmin_activity_id = ?')
+			.bind(Math.round(payload.duration_minutes * 60), userId, runId)
 			.run();
 	}
 
 	if (payload.avg_hr !== undefined) {
-		await db.prepare('UPDATE runs SET avg_hr = ? WHERE garmin_activity_id = ?')
-			.bind(payload.avg_hr, runId)
+		await db.prepare('UPDATE runs SET avg_hr = ? WHERE user_id = ? AND garmin_activity_id = ?')
+			.bind(payload.avg_hr, userId, runId)
 			.run();
 	}
 
@@ -82,16 +84,17 @@ export const PATCH: RequestHandler = async ({ params, request, locals }) => {
 // DELETE: Delete a run
 export const DELETE: RequestHandler = async ({ params, locals }) => {
 	const db = locals.db as LocalDatabase;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	const runId = params.id;
 
 	// Check if run exists
 	const existing = await db
-		.prepare('SELECT * FROM runs WHERE garmin_activity_id = ?')
-		.bind(runId)
+		.prepare('SELECT * FROM runs WHERE user_id = ? AND garmin_activity_id = ?')
+		.bind(userId, runId)
 		.first();
 
 	if (!existing) {
@@ -99,8 +102,8 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 	}
 
 	// Delete the run
-	await db.prepare('DELETE FROM runs WHERE garmin_activity_id = ?')
-		.bind(runId)
+	await db.prepare('DELETE FROM runs WHERE user_id = ? AND garmin_activity_id = ?')
+		.bind(userId, runId)
 		.run();
 
 	return json({
@@ -108,4 +111,3 @@ export const DELETE: RequestHandler = async ({ params, locals }) => {
 		message: 'Run deleted successfully'
 	});
 };
-

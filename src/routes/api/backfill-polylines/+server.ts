@@ -6,16 +6,17 @@ import { updateRunPolyline } from "$lib/server/db";
 export const POST: RequestHandler = async ({ locals }) => {
   const db = locals.db;
 
-  if (!db) {
+  if (!db || !locals.user) {
     return json(
       { success: false, error: "Database not available" },
       { status: 500 },
     );
   }
+  const userId = locals.user.id;
 
   try {
     // Fetch recent runs from Garmin (this will include polylines with our new code)
-    const runs = await fetchRecentRuns(db, 20);
+    const runs = await fetchRecentRuns(db, userId, 20);
 
     // Update polylines for runs that have them
     let updated = 0;
@@ -36,7 +37,12 @@ export const POST: RequestHandler = async ({ locals }) => {
         console.log(
           `Updating ${run.garmin_activity_id} with polyline string (${polylineStr.length} chars)`,
         );
-        await updateRunPolyline(db, run.garmin_activity_id, polylineStr);
+        await updateRunPolyline(
+          db,
+          userId,
+          run.garmin_activity_id,
+          polylineStr,
+        );
         updated++;
       } else {
         console.log(`Run ${run.garmin_activity_id} has no polyline`);

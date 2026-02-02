@@ -6,9 +6,10 @@ import { getChatHistory } from '$lib/server/db';
 export const POST: RequestHandler = async ({ request, locals }) => {
     try {
         const db = locals.db;
-        if (!db) {
+        if (!db || !locals.user) {
             return json({ error: 'Database not available' }, { status: 500 });
         }
+        const userId = locals.user.id;
 
         const { message } = await request.json();
         
@@ -16,7 +17,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
             return json({ error: 'Message is required' }, { status: 400 });
         }
 
-        const response = await processUserMessage(db, message);
+        const response = await processUserMessage(db, userId, message);
         return json({ response });
 
     } catch (error: any) {
@@ -28,11 +29,12 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 export const GET: RequestHandler = async ({ locals }) => {
     try {
         const db = locals.db;
-        if (!db) {
+        if (!db || !locals.user) {
             return json({ error: 'Database not available' }, { status: 500 });
         }
+        const userId = locals.user.id;
 
-        const history = await getChatHistory(db, 50);
+        const history = await getChatHistory(db, userId, 50);
         return json({ 
             history: history.map(msg => ({
                 id: msg.id,

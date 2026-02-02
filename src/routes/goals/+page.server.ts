@@ -6,14 +6,18 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (!db) {
     return { goals: [] };
   }
+  if (!locals.user) {
+    return { goals: [] };
+  }
+  const userId = locals.user.id;
 
   try {
-    const goals = await getActiveGoals(db);
+    const goals = await getActiveGoals(db, userId);
 
     // For each goal, calculate progress
     const goalsWithProgress = await Promise.all(
       goals.map(async (goal) => {
-        const progress = await calculateGoalProgress(db, goal);
+        const progress = await calculateGoalProgress(db, userId, goal);
         return { ...goal, progress };
       })
     );
@@ -30,6 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
  */
 async function calculateGoalProgress(
   db: any,
+  userId: string,
   goal: any // TrainingGoal
 ): Promise<{
   percentComplete: number;
@@ -54,7 +59,7 @@ async function calculateGoalProgress(
   const weeksCompleted = Math.max(0, Math.min(totalWeeks, Math.floor((now.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000))));
 
   // 2. Get Actual Progress (Any run since goal creation)
-  const runs = await getRunsAfterDate(db, startDate.split(' ')[0]); // Ensure YYYY-MM-DD format if needed, but typically standard SQL string comparison works
+  const runs = await getRunsAfterDate(db, userId, startDate.split(' ')[0]); // Ensure YYYY-MM-DD format if needed, but typically standard SQL string comparison works
   
   const runsCompleted = runs.length;
   const longestRun = runs.length > 0 
@@ -62,9 +67,12 @@ async function calculateGoalProgress(
     : 0;
 
   // 3. Get Planned Progress (If plans exist)
-  const plansResult = await db.prepare(
-    `SELECT * FROM training_plan WHERE goal_id = ? ORDER BY scheduled_date`
-  ).bind(goal.id).all();
+  const plansResult = await db
+    .prepare(
+      `SELECT * FROM training_plan WHERE user_id = ? AND goal_id = ? ORDER BY scheduled_date`,
+    )
+    .bind(userId, goal.id)
+    .all();
   const plannedWorkouts = plansResult.results || [];
   
   // Total runs expected is either the number of planned workouts OR estimation based on runs/week target

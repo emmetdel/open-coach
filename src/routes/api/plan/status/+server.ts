@@ -9,9 +9,10 @@ interface StatusChangeRequest {
 
 export const POST: RequestHandler = async ({ request, locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		return json({ success: false, error: 'Database not available' }, { status: 500 });
 	}
+	const userId = locals.user.id;
 
 	try {
 		const body: StatusChangeRequest = await request.json();
@@ -26,7 +27,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		}
 
 		// Update the status
-		await updatePlanStatus(db, planId, newStatus);
+		await updatePlanStatus(db, userId, planId, newStatus);
 
 		return json({
 			success: true,

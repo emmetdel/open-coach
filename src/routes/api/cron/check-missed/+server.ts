@@ -5,6 +5,7 @@ import { json } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { detectMissedRuns, checkConsistency } from "$lib/server/intelligence";
 import { sendPushNotification } from "$lib/server/notifications";
+import { listUsers } from "$lib/server/db";
 import { isCronAuthorized } from "$lib/server/cronAuth";
 
 export const POST: RequestHandler = async ({ request, locals }) => {
@@ -19,34 +20,37 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   try {
-    // Detect missed runs from yesterday
-    const missedResult = await detectMissedRuns(db);
+    const users = await listUsers(db);
+    let missedTotal = 0;
+    let notificationsSent = 0;
+    let encouragementSent = 0;
 
-    // Check overall consistency
-    const consistency = await checkConsistency(db);
+    for (const user of users) {
+      const missedResult = await detectMissedRuns(db, user.id);
+      missedTotal += missedResult.missedRuns.length;
+      notificationsSent += missedResult.notificationsSent;
 
-    // Send encouragement if user needs it (hasn't run in 5+ days)
-    if (consistency.needsEncouragement && consistency.lastRunDaysAgo >= 5) {
-      try {
-        await sendPushNotification(db, {
-          title: `It's been ${consistency.lastRunDaysAgo} days... 🏃`,
-          body: `No pressure! Just checking in. Ready to get back out there?`,
-          tag: "encouragement",
-          data: { url: "/" },
-        });
-      } catch (err) {
-        console.warn("Failed to send encouragement notification:", err);
+      const consistency = await checkConsistency(db, user.id);
+      if (consistency.needsEncouragement && consistency.lastRunDaysAgo >= 5) {
+        try {
+          await sendPushNotification(db, user.id, {
+            title: `It's been ${consistency.lastRunDaysAgo} days... 🏃`,
+            body: `No pressure! Just checking in. Ready to get back out there?`,
+            tag: "encouragement",
+            data: { url: "/" },
+          });
+          encouragementSent++;
+        } catch (err) {
+          console.warn("Failed to send encouragement notification:", err);
+        }
       }
     }
 
     return json({
       success: true,
-      missedRuns: missedResult.missedRuns.length,
-      notificationsSent: missedResult.notificationsSent,
-      streak: consistency.streak,
-      lastRunDaysAgo: consistency.lastRunDaysAgo,
-      encouragementSent:
-        consistency.needsEncouragement && consistency.lastRunDaysAgo >= 5,
+      missedRuns: missedTotal,
+      notificationsSent,
+      encouragementSent: encouragementSent > 0,
     });
   } catch (error: any) {
     console.error("Check missed runs error:", error);

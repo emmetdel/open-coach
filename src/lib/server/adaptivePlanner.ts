@@ -27,16 +27,27 @@ export interface WeeklyAnalysis {
  */
 export async function analyzeWeeklyProgress(
   db: Database,
+  userId: string,
   goalId: string,
 ): Promise<WeeklyAnalysis> {
   // Get current week number
-  const currentWeek = await getCurrentWeekNumber(db, goalId);
+  const currentWeek = await getCurrentWeekNumber(db, userId, goalId);
 
   // Get planned workouts for this week
-  const plannedWorkouts = await getWorkoutsForWeek(db, currentWeek, goalId);
+  const plannedWorkouts = await getWorkoutsForWeek(
+    db,
+    userId,
+    currentWeek,
+    goalId,
+  );
 
   // Get actual runs from this week
-  const actualRuns = await getActualRunsForWeek(db, currentWeek, goalId);
+  const actualRuns = await getActualRunsForWeek(
+    db,
+    userId,
+    currentWeek,
+    goalId,
+  );
 
   const plannedRuns = plannedWorkouts.length;
   const actualRunsCount = actualRuns.length;
@@ -60,7 +71,10 @@ export async function analyzeWeeklyProgress(
 
   if (variance.runs < -1) {
     recommendation = "add_makeup";
-  } else if (variance.volume > 5 && (await isConsistentlyAhead(db, goalId))) {
+  } else if (
+    variance.volume > 5 &&
+    (await isConsistentlyAhead(db, userId, goalId))
+  ) {
     recommendation = "reduce_volume";
   } else if (variance.runs < -2 && variance.volume < -10) {
     recommendation = "extend_timeline";
@@ -86,18 +100,25 @@ export async function analyzeWeeklyProgress(
  */
 export async function adjustNextWeek(
   db: Database,
+  userId: string,
   goalId: string,
   analysis: WeeklyAnalysis,
 ): Promise<void> {
   switch (analysis.recommendation) {
     case "add_makeup":
-      await addMakeupRun(db, goalId, analysis.weekNumber + 1);
+      await addMakeupRun(db, userId, goalId, analysis.weekNumber + 1);
       break;
     case "reduce_volume":
-      await reduceNextWeekVolume(db, goalId, analysis.weekNumber + 1, 0.9);
+      await reduceNextWeekVolume(
+        db,
+        userId,
+        goalId,
+        analysis.weekNumber + 1,
+        0.9,
+      );
       break;
     case "extend_timeline":
-      await extendGoalTimeline(db, goalId, 1);
+      await extendGoalTimeline(db, userId, goalId, 1);
       break;
     case "on_track":
       // No adjustment needed
@@ -110,15 +131,21 @@ export async function adjustNextWeek(
  */
 export async function addMakeupRun(
   db: Database,
+  userId: string,
   goalId: string,
   weekNumber: number,
 ): Promise<void> {
   // Find an available day next week that doesn't have a workout
-  const nextWeekWorkouts = await getWorkoutsForWeek(db, weekNumber, goalId);
+  const nextWeekWorkouts = await getWorkoutsForWeek(
+    db,
+    userId,
+    weekNumber,
+    goalId,
+  );
   const usedDays = nextWeekWorkouts.map((w) => getDayOfWeek(w.scheduled_date));
 
   // Get available days from settings
-  const availableDays = await getAvailableDays(db);
+  const availableDays = await getAvailableDays(db, userId);
   const openDay = availableDays.find((day) => !usedDays.includes(day));
 
   if (!openDay) {
@@ -132,6 +159,7 @@ export async function addMakeupRun(
 
   await insertPlan(db, {
     id: crypto.randomUUID(),
+    user_id: userId,
     scheduled_date: makeupDate,
     week_number: weekNumber,
     type: "Easy",
@@ -150,11 +178,17 @@ export async function addMakeupRun(
  */
 async function reduceNextWeekVolume(
   db: Database,
+  userId: string,
   goalId: string,
   weekNumber: number,
   reductionFactor: number,
 ): Promise<void> {
-  const workouts = await getWorkoutsForWeek(db, weekNumber, goalId);
+  const workouts = await getWorkoutsForWeek(
+    db,
+    userId,
+    weekNumber,
+    goalId,
+  );
 
   for (const workout of workouts) {
     const newDistance = (workout.target_distance_km || 0) * reductionFactor;
@@ -163,13 +197,13 @@ async function reduceNextWeekVolume(
 
     await db
       .prepare(
-        `UPDATE training_plan
+      `UPDATE training_plan
        SET target_distance_km = ?, target_duration_minutes = ?,
            description = description || ' (Reduced by 10%)'
-       WHERE id = ?`,
-      )
-      .bind(newDistance, newDuration, workout.id)
-      .run();
+       WHERE user_id = ? AND id = ?`,
+    )
+    .bind(newDistance, newDuration, userId, workout.id)
+    .run();
   }
 }
 
@@ -178,12 +212,13 @@ async function reduceNextWeekVolume(
  */
 async function extendGoalTimeline(
   db: Database,
+  userId: string,
   goalId: string,
   additionalWeeks: number,
 ): Promise<void> {
   const goal = await db
-    .prepare("SELECT target_date FROM training_goals WHERE id = ?")
-    .bind(goalId)
+    .prepare("SELECT target_date FROM training_goals WHERE user_id = ? AND id = ?")
+    .bind(userId, goalId)
     .first<{ target_date: string }>();
 
   if (!goal) return;
@@ -192,8 +227,10 @@ async function extendGoalTimeline(
   newDate.setDate(newDate.getDate() + additionalWeeks * 7);
 
   await db
-    .prepare("UPDATE training_goals SET target_date = ? WHERE id = ?")
-    .bind(newDate.toISOString().split("T")[0], goalId)
+    .prepare(
+      "UPDATE training_goals SET target_date = ? WHERE user_id = ? AND id = ?",
+    )
+    .bind(newDate.toISOString().split("T")[0], userId, goalId)
     .run();
 }
 
@@ -202,14 +239,15 @@ async function extendGoalTimeline(
  */
 async function isConsistentlyAhead(
   db: Database,
+  userId: string,
   goalId: string,
 ): Promise<boolean> {
   // Check last 3 weeks
-  const currentWeek = await getCurrentWeekNumber(db, goalId);
+  const currentWeek = await getCurrentWeekNumber(db, userId, goalId);
 
   for (let week = Math.max(1, currentWeek - 2); week < currentWeek; week++) {
-    const planned = await getWorkoutsForWeek(db, week, goalId);
-    const actual = await getActualRunsForWeek(db, week, goalId);
+    const planned = await getWorkoutsForWeek(db, userId, week, goalId);
+    const actual = await getActualRunsForWeek(db, userId, week, goalId);
 
     const plannedVolume = planned.reduce(
       (sum, w) => sum + (w.target_distance_km || 0),
@@ -232,14 +270,15 @@ async function isConsistentlyAhead(
 
 async function getCurrentWeekNumber(
   db: Database,
+  userId: string,
   goalId: string,
 ): Promise<number> {
   const result = await db
     .prepare(
       `SELECT MIN(week_number) as min_week FROM training_plan
-     WHERE goal_id = ? AND status = 'Pending'`,
+     WHERE user_id = ? AND goal_id = ? AND status = 'Pending'`,
     )
-    .bind(goalId)
+    .bind(userId, goalId)
     .first<{ min_week: number }>();
 
   return result?.min_week || 1;
@@ -247,26 +286,28 @@ async function getCurrentWeekNumber(
 
 async function getWorkoutsForWeek(
   db: Database,
+  userId: string,
   weekNumber: number,
   goalId: string,
 ): Promise<TrainingPlan[]> {
   const result = await db
     .prepare(
       `SELECT * FROM training_plan
-     WHERE week_number = ? AND goal_id = ?
+     WHERE user_id = ? AND week_number = ? AND goal_id = ?
      ORDER BY scheduled_date`,
     )
-    .bind(weekNumber, goalId)
+    .bind(userId, weekNumber, goalId)
     .all<TrainingPlan>();
   return result.results || [];
 }
 
 async function getActualRunsForWeek(
   db: Database,
+  userId: string,
   weekNumber: number,
   goalId: string,
 ): Promise<any[]> {
-  const workouts = await getWorkoutsForWeek(db, weekNumber, goalId);
+  const workouts = await getWorkoutsForWeek(db, userId, weekNumber, goalId);
   if (workouts.length === 0) return [];
 
   const startDate = workouts[0].scheduled_date;
@@ -275,16 +316,19 @@ async function getActualRunsForWeek(
   const result = await db
     .prepare(
       `SELECT * FROM runs
-     WHERE date >= ? AND date <= ?
+     WHERE user_id = ? AND date >= ? AND date <= ?
      ORDER BY date`,
     )
-    .bind(startDate, endDate)
+    .bind(userId, startDate, endDate)
     .all();
   return result.results || [];
 }
 
-async function getAvailableDays(db: Database): Promise<string[]> {
-  const value = await getSetting(db, SETTING_KEYS.AVAILABLE_DAYS);
+async function getAvailableDays(
+  db: Database,
+  userId: string,
+): Promise<string[]> {
+  const value = await getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS);
   return value ? JSON.parse(value) : ["Mon", "Wed", "Fri", "Sun"];
 }
 
@@ -325,13 +369,14 @@ async function insertPlan(db: Database, plan: any): Promise<void> {
   await db
     .prepare(
       `INSERT INTO training_plan
-     (id, scheduled_date, week_number, type, target_distance_km,
+     (id, user_id, scheduled_date, week_number, type, target_distance_km,
       target_duration_minutes, description, status, goal_id,
       google_event_id, garmin_workout_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       plan.id,
+      plan.user_id,
       plan.scheduled_date,
       plan.week_number,
       plan.type,

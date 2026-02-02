@@ -98,14 +98,15 @@ import type { LocalDatabase } from "./sqlite";
 type Database = LocalDatabase;
 
 // Get configured model or default
-async function getModel(db: Database): Promise<string> {
-  const model = await getSetting(db, SETTING_KEYS.OPENROUTER_MODEL);
+async function getModel(db: Database, userId: string): Promise<string> {
+  const model = await getSetting(db, userId, SETTING_KEYS.OPENROUTER_MODEL);
   return model || DEFAULT_MODEL;
 }
 
 // Get OpenRouter credentials from env or DB
 async function getOpenRouterCredentials(
   db: Database,
+  userId: string,
 ): Promise<{ apiKey: string | null; model: string }> {
   // Prefer environment variables
   if (process.env.OPENROUTER_API_KEY) {
@@ -116,7 +117,7 @@ async function getOpenRouterCredentials(
   }
 
   // Fall back to DB settings
-  const settings = await getSettings(db, [
+  const settings = await getSettings(db, userId, [
     SETTING_KEYS.OPENROUTER_KEY,
     SETTING_KEYS.OPENROUTER_MODEL,
   ]);
@@ -130,12 +131,13 @@ async function getOpenRouterCredentials(
 // Analyze a completed run and provide empathetic feedback
 export async function analyzeRun(
   db: Database,
-  run: Omit<Run, "ai_feedback" | "synced_to_calendar">,
+  userId: string,
+  run: Omit<Run, "ai_feedback" | "synced_to_calendar" | "user_id">,
 ): Promise<string> {
-  const { apiKey, model } = await getOpenRouterCredentials(db);
+  const { apiKey, model } = await getOpenRouterCredentials(db, userId);
 
   // Get run count for milestones
-  const recentRuns = await getRecentRuns(db, 100);
+  const recentRuns = await getRecentRuns(db, userId, 100);
   const runNumber = recentRuns.length + 1; // This will be their nth run
 
   // Get celebration prefix and context from centralized prompts
@@ -313,14 +315,17 @@ interface FullPlanResponse {
 }
 
 // Generate a full multi-week training plan (like Runna)
-export async function generateFullPlan(db: Database): Promise<{
+export async function generateFullPlan(
+  db: Database,
+  userId: string,
+): Promise<{
   success: boolean;
   runsCreated: number;
   totalWeeks: number;
   message: string;
 }> {
   // Get user's settings
-  const settings = await getSettings(db, [
+  const settings = await getSettings(db, userId, [
     SETTING_KEYS.TARGET_DATE,
     SETTING_KEYS.AVAILABLE_DAYS,
     SETTING_KEYS.CURRENT_FITNESS,
@@ -361,12 +366,13 @@ export async function generateFullPlan(db: Database): Promise<{
     currentFitness.toLowerCase().includes("experienced");
 
   // Generate a structured plan (full plan shown in app, only 7 days sync to Garmin)
-  return generateStructuredPlan(db, availableDays, totalWeeks, isComplete);
+  return generateStructuredPlan(db, userId, availableDays, totalWeeks, isComplete);
 }
 
 // Generate a structured multi-week plan (Runna-style)
 async function generateStructuredPlan(
   db: Database,
+  userId: string,
   availableDays: string[],
   totalWeeks: number,
   isExperienced: boolean,
@@ -379,7 +385,7 @@ async function generateStructuredPlan(
   // Delete old workouts from Garmin first (before clearing local DB)
   try {
     const { deleteAllOpenCoachWorkouts } = await import("./garmin");
-    const deleteResult = await deleteAllOpenCoachWorkouts(db);
+    const deleteResult = await deleteAllOpenCoachWorkouts(db, userId);
     console.log(`Deleted ${deleteResult.deleted} old workouts from Garmin`);
   } catch (err) {
     console.warn("Could not delete old Garmin workouts:", err);
@@ -387,14 +393,15 @@ async function generateStructuredPlan(
   }
 
   // Clear existing plans from local database
-  await deleteAllPlans(db);
+  await deleteAllPlans(db, userId);
 
   // Set plan metadata
   const startDate = getNextMonday();
-  await setPlanMetadata(db, "start_date", startDate);
-  await setPlanMetadata(db, "total_weeks", String(totalWeeks));
+  await setPlanMetadata(db, userId, "start_date", startDate);
+  await setPlanMetadata(db, userId, "total_weeks", String(totalWeeks));
   await setPlanMetadata(
     db,
+    userId,
     "plan_name",
     isExperienced ? "Building Fitness" : "New To Running",
   );
@@ -405,6 +412,7 @@ async function generateStructuredPlan(
   for (let week = 1; week <= totalWeeks; week++) {
     const weekStart = addDays(startDate, (week - 1) * 7);
     const weekWorkouts = generateWeekWorkouts(
+      userId,
       week,
       totalWeeks,
       availableDays.slice(0, runsPerWeek),
@@ -428,6 +436,7 @@ async function generateStructuredPlan(
 
 // Generate workouts for a specific week
 function generateWeekWorkouts(
+  userId: string,
   weekNum: number,
   totalWeeks: number,
   availableDays: string[],
@@ -485,6 +494,7 @@ function generateWeekWorkouts(
 
     workouts.push({
       id: crypto.randomUUID(),
+      user_id: userId,
       scheduled_date: scheduledDate,
       week_number: weekNum,
       type,
@@ -504,8 +514,9 @@ function generateWeekWorkouts(
 // Legacy function for backward compatibility
 export async function generateWeeklyPlan(
   db: Database,
+  userId: string,
 ): Promise<{ success: boolean; runsCreated: number; message: string }> {
-  const result = await generateFullPlan(db);
+  const result = await generateFullPlan(db, userId);
   return {
     success: result.success,
     runsCreated: result.runsCreated,
@@ -585,16 +596,17 @@ function getNextDateForDay(dayName: string): string | null {
 
 export async function processUserMessage(
   db: Database,
+  userId: string,
   userContent: string,
 ): Promise<string> {
-  const { apiKey, model } = await getOpenRouterCredentials(db);
+  const { apiKey, model } = await getOpenRouterCredentials(db, userId);
   if (!apiKey) {
     return "I need an OpenRouter API key to chat. Please check your settings.";
   }
 
   // 1. Save user message
   const userMsgId = crypto.randomUUID();
-  await insertChatMessage(db, {
+  await insertChatMessage(db, userId, {
     id: userMsgId,
     role: "user",
     content: userContent,
@@ -604,7 +616,7 @@ export async function processUserMessage(
   });
 
   // 2. Get context (recent history + plan context)
-  const history = await getChatHistory(db, 10);
+  const history = await getChatHistory(db, userId, 10);
   const messages: ApiMessage[] = history.map((h) => ({
     role: h.role as "user" | "assistant" | "system",
     content: h.content,
@@ -635,7 +647,13 @@ export async function processUserMessage(
 
         console.log(`[Coach] Executing tool: ${toolName}`, args);
 
-        const toolResult = await executePlanTool(db, toolName, args, userMsgId);
+        const toolResult = await executePlanTool(
+          db,
+          userId,
+          toolName,
+          args,
+          userMsgId,
+        );
 
         // Add tool result to the conversation for the final response
         messages.push({
@@ -657,7 +675,7 @@ export async function processUserMessage(
 
     // 5. Save Assistant Response
     if (finalContent) {
-      await insertChatMessage(db, {
+      await insertChatMessage(db, userId, {
         id: crypto.randomUUID(),
         role: "assistant",
         content: finalContent,

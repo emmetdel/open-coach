@@ -49,9 +49,20 @@ export interface NormalizedRun {
 }
 
 // Get authenticated Garmin client from stored tokens
-async function getGarminClient(db: Database): Promise<GarminClient> {
-  const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
-  const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
+async function getGarminClient(
+  db: Database,
+  userId: string,
+): Promise<GarminClient> {
+  const oauth1Str = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
+  );
+  const oauth2Str = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
+  );
 
   if (!oauth1Str || !oauth2Str) {
     throw new Error(
@@ -63,7 +74,7 @@ async function getGarminClient(db: Database): Promise<GarminClient> {
   const oauth2 = JSON.parse(oauth2Str);
 
   // Get stored credentials - GarminConnect constructor requires them
-  const creds = await getGarminCredentials(db);
+  const creds = await getGarminCredentials(db, userId);
   if (!creds) {
     throw new Error(
       "Garmin credentials not found. Please login at /setup with your Garmin credentials.",
@@ -80,18 +91,24 @@ async function getGarminClient(db: Database): Promise<GarminClient> {
 }
 
 // Save updated tokens after a request (in case they were refreshed)
-async function saveTokens(db: Database, client: GarminClient): Promise<void> {
+async function saveTokens(
+  db: Database,
+  userId: string,
+  client: GarminClient,
+): Promise<void> {
   const oauth1 = client.client.oauth1Token;
   const oauth2 = client.client.oauth2Token;
 
   if (oauth1 && oauth2) {
     await setSetting(
       db,
+      userId,
       SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
       JSON.stringify(oauth1),
     );
     await setSetting(
       db,
+      userId,
       SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
       JSON.stringify(oauth2),
     );
@@ -99,18 +116,30 @@ async function saveTokens(db: Database, client: GarminClient): Promise<void> {
 }
 
 // Check if we have valid tokens
-export async function hasValidTokens(db: Database): Promise<boolean> {
-  const oauth2Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH2_TOKEN);
-  const oauth1Str = await getSetting(db, SETTING_KEYS.GARMIN_OAUTH1_TOKEN);
+export async function hasValidTokens(
+  db: Database,
+  userId: string,
+): Promise<boolean> {
+  const oauth2Str = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.GARMIN_OAUTH2_TOKEN,
+  );
+  const oauth1Str = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.GARMIN_OAUTH1_TOKEN,
+  );
   return !!(oauth1Str && oauth2Str);
 }
 
 // Fetch recent running activities
 export async function fetchRecentRuns(
   db: Database,
+  userId: string,
   limit = 10,
 ): Promise<NormalizedRun[]> {
-  const hasTokens = await hasValidTokens(db);
+  const hasTokens = await hasValidTokens(db, userId);
 
   if (!hasTokens) {
     throw new Error(
@@ -119,13 +148,13 @@ export async function fetchRecentRuns(
   }
 
   try {
-    const client = await getGarminClient(db);
+    const client = await getGarminClient(db, userId);
 
     // Fetch activities
     const activities = await client.getActivities(0, limit);
 
     // Save tokens in case they were refreshed
-    await saveTokens(db, client);
+    await saveTokens(db, userId, client);
 
     console.log(`Fetched ${activities?.length || 0} activities from Garmin`);
 
@@ -550,6 +579,7 @@ function formatWorkoutName(
 // Push a workout to Garmin Connect
 export async function pushWorkoutToGarmin(
   db: Database,
+  userId: string,
   weekNumber: number,
   scheduledDate: string,
   description: string,
@@ -558,12 +588,12 @@ export async function pushWorkoutToGarmin(
   distanceKm: number | null,
 ): Promise<{ success: boolean; workoutId?: string; error?: string }> {
   try {
-    const hasTokens = await hasValidTokens(db);
+    const hasTokens = await hasValidTokens(db, userId);
     if (!hasTokens) {
       return { success: false, error: "Garmin not connected" };
     }
 
-    const client = await getGarminClient(db);
+    const client = await getGarminClient(db, userId);
 
     // Format name like Runna
     const name = formatWorkoutName(
@@ -595,7 +625,7 @@ export async function pushWorkoutToGarmin(
     console.log("Created Garmin workout:", workoutId);
 
     // Save updated tokens
-    await saveTokens(db, client);
+    await saveTokens(db, userId, client);
 
     // Schedule the workout for the specific date using the library's built-in method
     await scheduleWorkout(client, workoutId, scheduledDate);
@@ -642,10 +672,11 @@ async function scheduleWorkout(
 // Delete a workout from Garmin
 export async function deleteGarminWorkout(
   db: Database,
+  userId: string,
   workoutId: string,
 ): Promise<boolean> {
   try {
-    const client = await getGarminClient(db);
+    const client = await getGarminClient(db, userId);
 
     // Use the library's built-in deleteWorkout method
     await client.deleteWorkout({ workoutId });
@@ -661,9 +692,10 @@ export async function deleteGarminWorkout(
 // Delete all OpenCoach workouts from Garmin
 export async function deleteAllOpenCoachWorkouts(
   db: Database,
+  userId: string,
 ): Promise<{ deleted: number; errors: number }> {
   try {
-    const client = await getGarminClient(db);
+    const client = await getGarminClient(db, userId);
 
     // Fetch all workouts from Garmin using built-in method
     const workouts = await client.getWorkouts(0, 100);
@@ -688,7 +720,11 @@ export async function deleteAllOpenCoachWorkouts(
     let errors = 0;
 
     for (const workout of openCoachWorkouts) {
-      const success = await deleteGarminWorkout(db, String(workout.workoutId));
+      const success = await deleteGarminWorkout(
+        db,
+        userId,
+        String(workout.workoutId),
+      );
       if (success) {
         deleted++;
       } else {
@@ -698,7 +734,7 @@ export async function deleteAllOpenCoachWorkouts(
 
     // Also clear the garmin_workout_id from our database
     const { clearAllGarminWorkoutIds } = await import("./db");
-    await clearAllGarminWorkoutIds(db);
+    await clearAllGarminWorkoutIds(db, userId);
 
     return { deleted, errors };
   } catch (err) {
@@ -710,10 +746,11 @@ export async function deleteAllOpenCoachWorkouts(
 // Push this week's workouts to Garmin (only workouts within next 7 days)
 export async function pushWeekToGarmin(
   db: Database,
+  userId: string,
 ): Promise<{ success: boolean; pushed: number; errors: string[] }> {
   const { getUpcomingPlans, updatePlanGarminId } = await import("./db");
 
-  const plans = await getUpcomingPlans(db);
+  const plans = await getUpcomingPlans(db, userId);
   let pushed = 0;
   const errors: string[] = [];
 
@@ -725,6 +762,7 @@ export async function pushWeekToGarmin(
 
     const result = await pushWorkoutToGarmin(
       db,
+      userId,
       plan.week_number || 1,
       plan.scheduled_date,
       plan.description,
@@ -734,7 +772,7 @@ export async function pushWeekToGarmin(
     );
 
     if (result.success && result.workoutId) {
-      await updatePlanGarminId(db, plan.id, result.workoutId);
+      await updatePlanGarminId(db, userId, plan.id, result.workoutId);
       pushed++;
     } else {
       errors.push(`${plan.scheduled_date}: ${result.error}`);
@@ -769,13 +807,14 @@ export interface HealthSnapshot {
 // Get today's health snapshot for AI context
 export async function getHealthSnapshot(
   db: Database,
+  userId: string,
   date?: Date,
 ): Promise<HealthSnapshot | null> {
   try {
-    const hasTokens = await hasValidTokens(db);
+    const hasTokens = await hasValidTokens(db, userId);
     if (!hasTokens) return null;
 
-    const client = await getGarminClient(db);
+    const client = await getGarminClient(db, userId);
     const targetDate = date || new Date();
     const dateStr = targetDate.toISOString().split("T")[0];
 
@@ -892,7 +931,7 @@ export async function getHealthSnapshot(
     }
 
     // Save tokens in case they were refreshed
-    await saveTokens(db, client);
+    await saveTokens(db, userId, client);
 
     return snapshot;
   } catch (err) {
@@ -904,6 +943,7 @@ export async function getHealthSnapshot(
 // Get health data for the past N days (for trend analysis)
 export async function getHealthTrend(
   db: Database,
+  userId: string,
   days = 7,
 ): Promise<HealthSnapshot[]> {
   const snapshots: HealthSnapshot[] = [];
@@ -912,7 +952,7 @@ export async function getHealthTrend(
     const date = new Date();
     date.setDate(date.getDate() - i);
 
-    const snapshot = await getHealthSnapshot(db, date);
+    const snapshot = await getHealthSnapshot(db, userId, date);
     if (snapshot) {
       snapshots.push(snapshot);
     }

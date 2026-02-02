@@ -8,6 +8,7 @@ export function getDb(): LocalDatabase {
 }
 
 export interface Run {
+  user_id: string;
   garmin_activity_id: string;
   date: string;
   distance_meters: number;
@@ -22,6 +23,7 @@ export interface Run {
 
 export interface TrainingGoal {
   id: string;
+  user_id: string;
   name: string;
   goal_type: "distance" | "race" | "time_goal";
   target_date: string;
@@ -35,6 +37,7 @@ export interface TrainingGoal {
 
 export interface TrainingPlan {
   id: string;
+  user_id: string;
   scheduled_date: string;
   week_number: number;
   type: "Easy" | "Interval" | "Long" | "Rest" | "Walk-Run";
@@ -49,6 +52,7 @@ export interface TrainingPlan {
 
 export interface PushSubscription {
   id: string;
+  user_id: string;
   endpoint: string;
   p256dh: string;
   auth: string;
@@ -57,6 +61,7 @@ export interface PushSubscription {
 
 export interface ChatMessage {
   id: string;
+  user_id: string;
   role: "user" | "assistant" | "system";
   content: string;
   created_at: string;
@@ -66,6 +71,7 @@ export interface ChatMessage {
 
 export interface CoachAction {
   id: string;
+  user_id: string;
   action_type: string;
   description: string;
   parameters: string | null;
@@ -75,8 +81,25 @@ export interface CoachAction {
 }
 
 export interface UserSetting {
+  user_id: string;
   key: string;
   value: string;
+}
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string | null;
+  password_salt: string | null;
+  created_at: string;
+}
+
+export interface Session {
+  id: string;
+  user_id: string;
+  expires_at: string;
+  created_at: string;
 }
 
 // Settings keys
@@ -146,14 +169,144 @@ export const AVAILABLE_MODELS = [
 
 export type Database = LocalDatabase;
 
+// =========== User & Session Functions ===========
+
+export async function listUsers(db: Database): Promise<UserAccount[]> {
+  const result = await db.prepare("SELECT * FROM users").all<UserAccount>();
+  return result.results;
+}
+
+export async function getUserByEmail(
+  db: Database,
+  email: string,
+): Promise<UserAccount | null> {
+  return await db
+    .prepare("SELECT * FROM users WHERE email = ?")
+    .bind(email.toLowerCase())
+    .first<UserAccount>();
+}
+
+export async function getUserById(
+  db: Database,
+  userId: string,
+): Promise<UserAccount | null> {
+  return await db
+    .prepare("SELECT * FROM users WHERE id = ?")
+    .bind(userId)
+    .first<UserAccount>();
+}
+
+export async function createUser(
+  db: Database,
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    password_hash: string | null;
+    password_salt: string | null;
+  },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO users (id, email, name, password_hash, password_salt)
+       VALUES (?, ?, ?, ?, ?)`,
+    )
+    .bind(
+      user.id,
+      user.email.toLowerCase(),
+      user.name,
+      user.password_hash,
+      user.password_salt,
+    )
+    .run();
+}
+
+export async function updateUser(
+  db: Database,
+  userId: string,
+  updates: Partial<Pick<UserAccount, "email" | "name" | "password_hash" | "password_salt">>,
+): Promise<void> {
+  const fields: string[] = [];
+  const values: string[] = [];
+
+  if (updates.email !== undefined) {
+    fields.push("email = ?");
+    values.push(updates.email.toLowerCase());
+  }
+  if (updates.name !== undefined) {
+    fields.push("name = ?");
+    values.push(updates.name);
+  }
+  if (updates.password_hash !== undefined) {
+    fields.push("password_hash = ?");
+    values.push(updates.password_hash ?? "");
+  }
+  if (updates.password_salt !== undefined) {
+    fields.push("password_salt = ?");
+    values.push(updates.password_salt ?? "");
+  }
+
+  if (fields.length === 0) return;
+
+  values.push(userId);
+  await db
+    .prepare(`UPDATE users SET ${fields.join(", ")} WHERE id = ?`)
+    .bind(...values)
+    .run();
+}
+
+export async function createSession(
+  db: Database,
+  session: { id: string; user_id: string; expires_at: string },
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO sessions (id, user_id, expires_at)
+       VALUES (?, ?, ?)`,
+    )
+    .bind(session.id, session.user_id, session.expires_at)
+    .run();
+}
+
+export async function getSessionById(
+  db: Database,
+  sessionId: string,
+): Promise<Session | null> {
+  return await db
+    .prepare("SELECT * FROM sessions WHERE id = ?")
+    .bind(sessionId)
+    .first<Session>();
+}
+
+export async function deleteSession(
+  db: Database,
+  sessionId: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM sessions WHERE id = ?")
+    .bind(sessionId)
+    .run();
+}
+
+export async function deleteSessionsForUser(
+  db: Database,
+  userId: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM sessions WHERE user_id = ?")
+    .bind(userId)
+    .run();
+}
+
 // Get a single setting
 export async function getSetting(
   db: Database,
+  userId: string,
   key: string,
 ): Promise<string | null> {
   const result = await db
-    .prepare("SELECT value FROM user_settings WHERE key = ?")
-    .bind(key)
+    .prepare("SELECT value FROM user_settings WHERE user_id = ? AND key = ?")
+    .bind(userId, key)
     .first<{ value: string }>();
   return result?.value ?? null;
 }
@@ -161,14 +314,15 @@ export async function getSetting(
 // Get multiple settings
 export async function getSettings(
   db: Database,
+  userId: string,
   keys: string[],
 ): Promise<Record<string, string | null>> {
   const placeholders = keys.map(() => "?").join(",");
   const result = await db
     .prepare(
-      `SELECT key, value FROM user_settings WHERE key IN (${placeholders})`,
+      `SELECT key, value FROM user_settings WHERE user_id = ? AND key IN (${placeholders})`,
     )
-    .bind(...keys)
+    .bind(userId, ...keys)
     .all<UserSetting>();
 
   const settings: Record<string, string | null> = {};
@@ -182,28 +336,30 @@ export async function getSettings(
 // Set a setting (upsert)
 export async function setSetting(
   db: Database,
+  userId: string,
   key: string,
   value: string,
 ): Promise<void> {
   await db
     .prepare(
-      "INSERT INTO user_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      "INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
     )
-    .bind(key, value)
+    .bind(userId, key, value)
     .run();
 }
 
 // Set multiple settings
 export async function setSettings(
   db: Database,
+  userId: string,
   settings: Record<string, string>,
 ): Promise<void> {
   const statements = Object.entries(settings).map(([key, value]) =>
     db
       .prepare(
-        "INSERT INTO user_settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        "INSERT INTO user_settings (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
       )
-      .bind(key, value),
+      .bind(userId, key, value),
   );
   await db.batch(statements);
 }
@@ -211,20 +367,29 @@ export async function setSettings(
 // Get runs after a certain date
 export async function getRunsAfterDate(
   db: Database,
+  userId: string,
   fromDate: string,
 ): Promise<Run[]> {
   const result = await db
-    .prepare("SELECT * FROM runs WHERE date >= ? ORDER BY date ASC")
-    .bind(fromDate)
+    .prepare(
+      "SELECT * FROM runs WHERE user_id = ? AND date >= ? ORDER BY date ASC",
+    )
+    .bind(userId, fromDate)
     .all<Run>();
   return result.results;
 }
 
 // Get recent runs
-export async function getRecentRuns(db: Database, limit = 10): Promise<Run[]> {
+export async function getRecentRuns(
+  db: Database,
+  userId: string,
+  limit = 10,
+): Promise<Run[]> {
   const result = await db
-    .prepare("SELECT * FROM runs ORDER BY date DESC LIMIT ?")
-    .bind(limit)
+    .prepare(
+      "SELECT * FROM runs WHERE user_id = ? ORDER BY date DESC LIMIT ?",
+    )
+    .bind(userId, limit)
     .all<Run>();
   return result.results;
 }
@@ -232,25 +397,30 @@ export async function getRecentRuns(db: Database, limit = 10): Promise<Run[]> {
 // Get a run by Garmin activity ID
 export async function getRunByActivityId(
   db: Database,
+  userId: string,
   activityId: string,
 ): Promise<Run | null> {
   return await db
-    .prepare("SELECT * FROM runs WHERE garmin_activity_id = ?")
-    .bind(activityId)
+    .prepare(
+      "SELECT * FROM runs WHERE user_id = ? AND garmin_activity_id = ?",
+    )
+    .bind(userId, activityId)
     .first<Run>();
 }
 
 // Insert a new run
 export async function insertRun(
   db: Database,
-  run: Omit<Run, "synced_to_calendar">,
+  userId: string,
+  run: Omit<Run, "synced_to_calendar" | "user_id">,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO runs (garmin_activity_id, date, distance_meters, duration_seconds, avg_hr, max_hr, stress_score, ai_feedback, map_polyline)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO runs (user_id, garmin_activity_id, date, distance_meters, duration_seconds, avg_hr, max_hr, stress_score, ai_feedback, map_polyline)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
+      userId,
       run.garmin_activity_id,
       run.date,
       run.distance_meters,
@@ -267,33 +437,41 @@ export async function insertRun(
 // Update AI feedback for a run
 export async function updateRunFeedback(
   db: Database,
+  userId: string,
   activityId: string,
   feedback: string,
 ): Promise<void> {
   await db
-    .prepare("UPDATE runs SET ai_feedback = ? WHERE garmin_activity_id = ?")
-    .bind(feedback, activityId)
+    .prepare(
+      "UPDATE runs SET ai_feedback = ? WHERE user_id = ? AND garmin_activity_id = ?",
+    )
+    .bind(feedback, userId, activityId)
     .run();
 }
 
 // Update polyline for a run
 export async function updateRunPolyline(
   db: Database,
+  userId: string,
   activityId: string,
   polyline: string | null,
 ): Promise<void> {
   await db
-    .prepare("UPDATE runs SET map_polyline = ? WHERE garmin_activity_id = ?")
-    .bind(polyline, activityId)
+    .prepare(
+      "UPDATE runs SET map_polyline = ? WHERE user_id = ? AND garmin_activity_id = ?",
+    )
+    .bind(polyline, userId, activityId)
     .run();
 }
 
 // Get all existing activity IDs (for deduplication)
 export async function getExistingActivityIds(
   db: Database,
+  userId: string,
 ): Promise<Set<string>> {
   const result = await db
-    .prepare("SELECT garmin_activity_id FROM runs")
+    .prepare("SELECT garmin_activity_id FROM runs WHERE user_id = ?")
+    .bind(userId)
     .all<{ garmin_activity_id: string }>();
   return new Set(result.results.map((r) => r.garmin_activity_id));
 }
@@ -301,16 +479,18 @@ export async function getExistingActivityIds(
 // Calculate consistency stats (runs per week for the last N weeks)
 export async function getConsistencyStats(
   db: Database,
+  userId: string,
   weeks = 8,
 ): Promise<{ week: string; count: number }[]> {
   const result = await db
     .prepare(
       `SELECT strftime('%Y-%W', date) as week, COUNT(*) as count
        FROM runs
-       WHERE date >= date('now', '-${weeks * 7} days')
+       WHERE user_id = ? AND date >= date('now', '-${weeks * 7} days')
        GROUP BY week
        ORDER BY week DESC`,
     )
+    .bind(userId)
     .all<{ week: string; count: number }>();
   return result.results;
 }
@@ -318,6 +498,7 @@ export async function getConsistencyStats(
 // Check if Garmin credentials are available (from env or DB)
 export async function getGarminCredentials(
   db: Database,
+  userId: string,
 ): Promise<{ email: string; password: string } | null> {
   // Check environment variables first
   const envEmail = process.env.GARMIN_EMAIL;
@@ -327,8 +508,8 @@ export async function getGarminCredentials(
   }
 
   // Fall back to database
-  const dbEmail = await getSetting(db, SETTING_KEYS.GARMIN_EMAIL);
-  const dbPassword = await getSetting(db, SETTING_KEYS.GARMIN_PASSWORD);
+  const dbEmail = await getSetting(db, userId, SETTING_KEYS.GARMIN_EMAIL);
+  const dbPassword = await getSetting(db, userId, SETTING_KEYS.GARMIN_PASSWORD);
   if (dbEmail && dbPassword) {
     return { email: dbEmail, password: dbPassword };
   }
@@ -342,16 +523,23 @@ export function hasEnvGarminCredentials(): boolean {
 }
 
 // Check if user has completed setup (just needs Garmin and goals)
-export async function hasCompletedSetup(db: Database): Promise<boolean> {
+export async function hasCompletedSetup(
+  db: Database,
+  userId: string,
+): Promise<boolean> {
   // Check env vars first for Garmin
   const hasEnvGarmin = hasEnvGarminCredentials();
   const garminEmail = hasEnvGarmin
     ? process.env.GARMIN_EMAIL
-    : await getSetting(db, SETTING_KEYS.GARMIN_EMAIL);
+    : await getSetting(db, userId, SETTING_KEYS.GARMIN_EMAIL);
 
-  const targetDate = await getSetting(db, SETTING_KEYS.TARGET_DATE);
-  const availableDays = await getSetting(db, SETTING_KEYS.AVAILABLE_DAYS);
-  return !!(garminEmail && targetDate && availableDays);
+  const availableDays = await getSetting(
+    db,
+    userId,
+    SETTING_KEYS.AVAILABLE_DAYS,
+  );
+  const goals = await getActiveGoals(db, userId);
+  return !!(garminEmail && availableDays && goals.length > 0);
 }
 
 // =========== Training Plan Functions ===========
@@ -359,18 +547,20 @@ export async function hasCompletedSetup(db: Database): Promise<boolean> {
 // Get upcoming planned runs for this week only (next 7 days)
 export async function getUpcomingPlans(
   db: Database,
+  userId: string,
   limit = 7,
 ): Promise<TrainingPlan[]> {
   const result = await db
     .prepare(
       `SELECT * FROM training_plan
-			 WHERE scheduled_date >= date('now')
+			 WHERE user_id = ?
+			   AND scheduled_date >= date('now')
 			   AND scheduled_date <= date('now', '+7 days')
 			   AND status = 'Pending'
 			 ORDER BY scheduled_date ASC
 			 LIMIT ?`,
     )
-    .bind(limit)
+    .bind(userId, limit)
     .all<TrainingPlan>();
   return result.results;
 }
@@ -378,16 +568,17 @@ export async function getUpcomingPlans(
 // Get all plans for a date range
 export async function getPlansForRange(
   db: Database,
+  userId: string,
   startDate: string,
   endDate: string,
 ): Promise<TrainingPlan[]> {
   const result = await db
     .prepare(
       `SELECT * FROM training_plan
-			 WHERE scheduled_date >= ? AND scheduled_date <= ?
+			 WHERE user_id = ? AND scheduled_date >= ? AND scheduled_date <= ?
 			 ORDER BY scheduled_date ASC`,
     )
-    .bind(startDate, endDate)
+    .bind(userId, startDate, endDate)
     .all<TrainingPlan>();
   return result.results;
 }
@@ -399,11 +590,12 @@ export async function insertPlan(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO training_plan (id, scheduled_date, week_number, type, target_distance_km, target_duration_minutes, description, status, google_event_id, garmin_workout_id)
-			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO training_plan (id, user_id, scheduled_date, week_number, type, target_distance_km, target_duration_minutes, description, status, google_event_id, garmin_workout_id)
+			 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       plan.id,
+      plan.user_id,
       plan.scheduled_date,
       plan.week_number,
       plan.type,
@@ -420,11 +612,13 @@ export async function insertPlan(
 // Get all plans grouped by week
 export async function getPlansGroupedByWeek(
   db: Database,
+  userId: string,
 ): Promise<Map<number, TrainingPlan[]>> {
   const result = await db
     .prepare(
-      `SELECT * FROM training_plan WHERE status = 'Pending' ORDER BY week_number, scheduled_date`,
+      `SELECT * FROM training_plan WHERE user_id = ? AND status = 'Pending' ORDER BY week_number, scheduled_date`,
     )
+    .bind(userId)
     .all<TrainingPlan>();
 
   const grouped = new Map<number, TrainingPlan[]>();
@@ -441,9 +635,11 @@ export async function getPlansGroupedByWeek(
 // Get plan metadata
 export async function getPlanMetadata(
   db: Database,
+  userId: string,
 ): Promise<Record<string, string | null>> {
   const result = await db
-    .prepare("SELECT key, value FROM plan_metadata")
+    .prepare("SELECT key, value FROM plan_metadata WHERE user_id = ?")
+    .bind(userId)
     .all<{ key: string; value: string }>();
 
   const metadata: Record<string, string | null> = {};
@@ -456,27 +652,42 @@ export async function getPlanMetadata(
 // Set plan metadata
 export async function setPlanMetadata(
   db: Database,
+  userId: string,
   key: string,
   value: string,
 ): Promise<void> {
   await db
     .prepare(
-      "INSERT INTO plan_metadata (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+      "INSERT INTO plan_metadata (user_id, key, value) VALUES (?, ?, ?) ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value",
     )
-    .bind(key, value)
+    .bind(userId, key, value)
     .run();
 }
 
 // Delete all plans (for regenerating full plan)
 // NOTE: Only deletes pending plans to preserve historical data (Completed/Missed workouts)
-export async function deleteAllPlans(db: Database): Promise<void> {
-  await db.prepare("DELETE FROM training_plan WHERE status = 'Pending'").run();
-  await db.prepare("DELETE FROM plan_metadata").run();
+export async function deleteAllPlans(
+  db: Database,
+  userId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      "DELETE FROM training_plan WHERE user_id = ? AND status = 'Pending'",
+    )
+    .bind(userId)
+    .run();
+  await db
+    .prepare("DELETE FROM plan_metadata WHERE user_id = ?")
+    .bind(userId)
+    .run();
 }
 
 // Get current week number based on plan start date
-export async function getCurrentWeekNumber(db: Database): Promise<number> {
-  const metadata = await getPlanMetadata(db);
+export async function getCurrentWeekNumber(
+  db: Database,
+  userId: string,
+): Promise<number> {
+  const metadata = await getPlanMetadata(db, userId);
   const startDate = metadata["start_date"];
   if (!startDate) return 1;
 
@@ -491,49 +702,62 @@ export async function getCurrentWeekNumber(db: Database): Promise<number> {
 // Update plan status
 export async function updatePlanStatus(
   db: Database,
+  userId: string,
   planId: string,
   status: TrainingPlan["status"],
 ): Promise<void> {
   await db
-    .prepare("UPDATE training_plan SET status = ? WHERE id = ?")
-    .bind(status, planId)
+    .prepare("UPDATE training_plan SET status = ? WHERE user_id = ? AND id = ?")
+    .bind(status, userId, planId)
     .run();
 }
 
 // Update Garmin workout ID after syncing to watch
 export async function updatePlanGarminId(
   db: Database,
+  userId: string,
   planId: string,
   garminWorkoutId: string,
 ): Promise<void> {
   await db
-    .prepare("UPDATE training_plan SET garmin_workout_id = ? WHERE id = ?")
-    .bind(garminWorkoutId, planId)
+    .prepare(
+      "UPDATE training_plan SET garmin_workout_id = ? WHERE user_id = ? AND id = ?",
+    )
+    .bind(garminWorkoutId, userId, planId)
     .run();
 }
 
 // Clear all Garmin workout IDs (after deleting from Garmin)
 // NOTE: Only clears IDs for pending workouts to preserve historical data
-export async function clearAllGarminWorkoutIds(db: Database): Promise<void> {
+export async function clearAllGarminWorkoutIds(
+  db: Database,
+  userId: string,
+): Promise<void> {
   await db
     .prepare(
-      "UPDATE training_plan SET garmin_workout_id = NULL WHERE status = 'Pending'",
+      "UPDATE training_plan SET garmin_workout_id = NULL WHERE user_id = ? AND status = 'Pending'",
     )
+    .bind(userId)
     .run();
 }
 
 // Delete future pending plans (for regenerating)
-export async function deleteFuturePlans(db: Database): Promise<void> {
+export async function deleteFuturePlans(
+  db: Database,
+  userId: string,
+): Promise<void> {
   await db
     .prepare(
-      `DELETE FROM training_plan WHERE scheduled_date >= date('now') AND status = 'Pending'`,
+      `DELETE FROM training_plan WHERE user_id = ? AND scheduled_date >= date('now') AND status = 'Pending'`,
     )
+    .bind(userId)
     .run();
 }
 
 // Smart run matching: Find nearest pending plan for a completed run and mark it complete
 export async function matchRunToPlan(
   db: Database,
+  userId: string,
   runDate: string,
 ): Promise<boolean> {
   // Parse run date (format: "2026-01-08 12:34:45" or "2026-01-08")
@@ -545,12 +769,13 @@ export async function matchRunToPlan(
     .prepare(
       `SELECT id, scheduled_date, type
 			 FROM training_plan
-			 WHERE status = 'Pending'
+			 WHERE user_id = ?
+			   AND status = 'Pending'
 			   AND type != 'Rest'
 			   AND scheduled_date BETWEEN date(?, '-4 days') AND date(?, '+4 days')
 			 ORDER BY scheduled_date`,
     )
-    .bind(runDateOnly, runDateOnly)
+    .bind(userId, runDateOnly, runDateOnly)
     .all<{ id: string; scheduled_date: string; type: string }>();
 
   if (nearbyPlans.results.length === 0) {
@@ -573,7 +798,7 @@ export async function matchRunToPlan(
 
   if (closestPlan) {
     // Mark the closest plan as completed
-    await updatePlanStatus(db, closestPlan.id, "Completed");
+    await updatePlanStatus(db, userId, closestPlan.id, "Completed");
     console.log(
       `✓ Matched run from ${runDateOnly} to plan on ${closestPlan.scheduled_date}`,
     );
@@ -584,31 +809,37 @@ export async function matchRunToPlan(
 }
 
 // Get the next scheduled run
-export async function getNextRun(db: Database): Promise<TrainingPlan | null> {
+export async function getNextRun(
+  db: Database,
+  userId: string,
+): Promise<TrainingPlan | null> {
   return await db
     .prepare(
       `SELECT * FROM training_plan
-			 WHERE scheduled_date >= date('now') AND status = 'Pending'
+			 WHERE user_id = ? AND scheduled_date >= date('now') AND status = 'Pending'
 			 ORDER BY scheduled_date ASC
 			 LIMIT 1`,
     )
+    .bind(userId)
     .first<TrainingPlan>();
 }
 
 // Push subscription management
 export async function savePushSubscription(
   db: Database,
+  userId: string,
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } },
 ): Promise<void> {
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO push_subscriptions (id, endpoint, p256dh, auth, created_at)
-       VALUES (?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
+      `INSERT INTO push_subscriptions (id, user_id, endpoint, p256dh, auth, created_at)
+       VALUES (?, ?, ?, ?, ?, datetime('now'))
+       ON CONFLICT(user_id, endpoint) DO UPDATE SET p256dh = excluded.p256dh, auth = excluded.auth`,
     )
     .bind(
       id,
+      userId,
       subscription.endpoint,
       subscription.keys.p256dh,
       subscription.keys.auth,
@@ -618,20 +849,23 @@ export async function savePushSubscription(
 
 export async function getPushSubscriptions(
   db: Database,
+  userId: string,
 ): Promise<PushSubscription[]> {
   const result = await db
-    .prepare("SELECT * FROM push_subscriptions")
+    .prepare("SELECT * FROM push_subscriptions WHERE user_id = ?")
+    .bind(userId)
     .all<PushSubscription>();
   return result.results;
 }
 
 export async function deletePushSubscription(
   db: Database,
+  userId: string,
   endpoint: string,
 ): Promise<void> {
   await db
-    .prepare("DELETE FROM push_subscriptions WHERE endpoint = ?")
-    .bind(endpoint)
+    .prepare("DELETE FROM push_subscriptions WHERE user_id = ? AND endpoint = ?")
+    .bind(userId, endpoint)
     .run();
 }
 
@@ -640,15 +874,17 @@ export async function deletePushSubscription(
 // Insert a chat message
 export async function insertChatMessage(
   db: Database,
+  userId: string,
   message: ChatMessage,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO chat_messages (id, role, content, created_at, context_type, context_id)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO chat_messages (id, user_id, role, content, created_at, context_type, context_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       message.id,
+      userId,
       message.role,
       message.content,
       message.created_at,
@@ -661,11 +897,14 @@ export async function insertChatMessage(
 // Get chat history
 export async function getChatHistory(
   db: Database,
+  userId: string,
   limit = 50,
 ): Promise<ChatMessage[]> {
   const result = await db
-    .prepare("SELECT * FROM chat_messages ORDER BY created_at ASC LIMIT ?") // Show oldest to newest
-    .bind(limit)
+    .prepare(
+      "SELECT * FROM chat_messages WHERE user_id = ? ORDER BY created_at ASC LIMIT ?",
+    ) // Show oldest to newest
+    .bind(userId, limit)
     .all<ChatMessage>();
   return result.results;
 }
@@ -673,15 +912,17 @@ export async function getChatHistory(
 // Insert a coach action log
 export async function insertCoachAction(
   db: Database,
+  userId: string,
   action: CoachAction,
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO coach_actions (id, action_type, description, parameters, status, created_at, message_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO coach_actions (id, user_id, action_type, description, parameters, status, created_at, message_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       action.id,
+      userId,
       action.action_type,
       action.description,
       action.parameters,
@@ -697,25 +938,29 @@ export async function insertCoachAction(
 // Get workout by date
 export async function getWorkoutByDate(
   db: Database,
+  userId: string,
   date: string,
 ): Promise<TrainingPlan | null> {
   return await db
-    .prepare("SELECT * FROM training_plan WHERE scheduled_date = ?")
-    .bind(date)
+    .prepare(
+      "SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date = ?",
+    )
+    .bind(userId, date)
     .first<TrainingPlan>();
 }
 
 // Get workouts in date range
 export async function getWorkoutsInRange(
   db: Database,
+  userId: string,
   startDate: string,
   endDate: string,
 ): Promise<TrainingPlan[]> {
   const result = await db
     .prepare(
-      "SELECT * FROM training_plan WHERE scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date",
+      "SELECT * FROM training_plan WHERE user_id = ? AND scheduled_date BETWEEN ? AND ? ORDER BY scheduled_date",
     )
-    .bind(startDate, endDate)
+    .bind(userId, startDate, endDate)
     .all<TrainingPlan>();
   return result.results;
 }
@@ -723,30 +968,36 @@ export async function getWorkoutsInRange(
 // Delete a single workout
 export async function deleteWorkout(
   db: Database,
+  userId: string,
   planId: string,
 ): Promise<void> {
-  await db.prepare("DELETE FROM training_plan WHERE id = ?").bind(planId).run();
+  await db
+    .prepare("DELETE FROM training_plan WHERE user_id = ? AND id = ?")
+    .bind(userId, planId)
+    .run();
 }
 
 // Get run by date (for matching)
 export async function getRunByDate(
   db: Database,
+  userId: string,
   date: string,
 ): Promise<Run | null> {
   return await db
-    .prepare("SELECT * FROM runs WHERE date(date) = ?")
-    .bind(date)
+    .prepare("SELECT * FROM runs WHERE user_id = ? AND date(date) = ?")
+    .bind(userId, date)
     .first<Run>();
 }
 
 // Delete a run
 export async function deleteRun(
   db: Database,
+  userId: string,
   activityId: string,
 ): Promise<void> {
   await db
-    .prepare("DELETE FROM runs WHERE garmin_activity_id = ?")
-    .bind(activityId)
+    .prepare("DELETE FROM runs WHERE user_id = ? AND garmin_activity_id = ?")
+    .bind(userId, activityId)
     .run();
 }
 
@@ -755,16 +1006,18 @@ export async function deleteRun(
 // Create a new training goal
 export async function createGoal(
   db: Database,
-  goal: Omit<TrainingGoal, "id" | "created_at" | "completed_at">,
+  userId: string,
+  goal: Omit<TrainingGoal, "id" | "created_at" | "completed_at" | "user_id">,
 ): Promise<string> {
   const id = crypto.randomUUID();
   await db
     .prepare(
-      `INSERT INTO training_goals (id, name, goal_type, target_date, target_distance_km, target_duration_minutes, description, status)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO training_goals (id, user_id, name, goal_type, target_date, target_distance_km, target_duration_minutes, description, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .bind(
       id,
+      userId,
       goal.name,
       goal.goal_type,
       goal.target_date,
@@ -778,11 +1031,15 @@ export async function createGoal(
 }
 
 // Get all active goals
-export async function getActiveGoals(db: Database): Promise<TrainingGoal[]> {
+export async function getActiveGoals(
+  db: Database,
+  userId: string,
+): Promise<TrainingGoal[]> {
   const result = await db
     .prepare(
-      "SELECT * FROM training_goals WHERE status = 'active' ORDER BY target_date ASC",
+      "SELECT * FROM training_goals WHERE user_id = ? AND status = 'active' ORDER BY target_date ASC",
     )
+    .bind(userId)
     .all<TrainingGoal>();
   return result.results;
 }
@@ -790,17 +1047,19 @@ export async function getActiveGoals(db: Database): Promise<TrainingGoal[]> {
 // Get goal by ID
 export async function getGoalById(
   db: Database,
+  userId: string,
   id: string,
 ): Promise<TrainingGoal | null> {
   return await db
-    .prepare("SELECT * FROM training_goals WHERE id = ?")
-    .bind(id)
+    .prepare("SELECT * FROM training_goals WHERE user_id = ? AND id = ?")
+    .bind(userId, id)
     .first<TrainingGoal>();
 }
 
 // Update goal
 export async function updateGoal(
   db: Database,
+  userId: string,
   id: string,
   updates: Partial<TrainingGoal>,
 ): Promise<void> {
@@ -819,33 +1078,56 @@ export async function updateGoal(
     fields.push("target_distance_km = ?");
     values.push(updates.target_distance_km);
   }
+  if (updates.target_duration_minutes !== undefined) {
+    fields.push("target_duration_minutes = ?");
+    values.push(updates.target_duration_minutes);
+  }
+  if (updates.goal_type !== undefined) {
+    fields.push("goal_type = ?");
+    values.push(updates.goal_type);
+  }
+  if (updates.description !== undefined) {
+    fields.push("description = ?");
+    values.push(updates.description);
+  }
   if (updates.status !== undefined) {
     fields.push("status = ?");
     values.push(updates.status);
   }
 
   if (fields.length > 0) {
-    values.push(id);
+    values.push(userId, id);
     await db
-      .prepare(`UPDATE training_goals SET ${fields.join(", ")} WHERE id = ?`)
+      .prepare(
+        `UPDATE training_goals SET ${fields.join(", ")} WHERE user_id = ? AND id = ?`,
+      )
       .bind(...values)
       .run();
   }
 }
 
 // Delete goal
-export async function deleteGoal(db: Database, id: string): Promise<void> {
-  await db.prepare("DELETE FROM training_goals WHERE id = ?").bind(id).run();
+export async function deleteGoal(
+  db: Database,
+  userId: string,
+  id: string,
+): Promise<void> {
+  await db
+    .prepare("DELETE FROM training_goals WHERE user_id = ? AND id = ?")
+    .bind(userId, id)
+    .run();
 }
 
 // Get all completed/missed workouts for display (historical data)
 export async function getHistoricalWorkouts(
   db: Database,
+  userId: string,
   goalId?: string,
 ): Promise<TrainingPlan[]> {
   const query = goalId
-    ? "SELECT * FROM training_plan WHERE goal_id = ? AND status IN ('Completed', 'Missed') ORDER BY scheduled_date"
-    : "SELECT * FROM training_plan WHERE status IN ('Completed', 'Missed') ORDER BY scheduled_date";
+    ? "SELECT * FROM training_plan WHERE user_id = ? AND goal_id = ? AND status IN ('Completed', 'Missed') ORDER BY scheduled_date"
+    : "SELECT * FROM training_plan WHERE user_id = ? AND status IN ('Completed', 'Missed') ORDER BY scheduled_date";
 
-  return await db.prepare(query).bind(goalId).all<TrainingPlan>();
+  const params = goalId ? [userId, goalId] : [userId];
+  return await db.prepare(query).bind(...params).all<TrainingPlan>();
 }

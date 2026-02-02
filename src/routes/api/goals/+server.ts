@@ -5,12 +5,13 @@ import { getActiveGoals, createGoal } from '$lib/server/db';
 // GET /api/goals - List all goals
 export const GET: RequestHandler = async ({ locals }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, 'Database not available');
   }
+  const userId = locals.user.id;
 
   try {
-    const goals = await getActiveGoals(db);
+    const goals = await getActiveGoals(db, userId);
     return json({ goals });
   } catch (err) {
     console.error('Failed to fetch goals:', err);
@@ -21,17 +22,18 @@ export const GET: RequestHandler = async ({ locals }) => {
 // POST /api/goals - Create new goal
 export const POST: RequestHandler = async ({ locals, request }) => {
   const db = locals.db;
-  if (!db) {
+  if (!db || !locals.user) {
     throw error(500, 'Database not available');
   }
+  const userId = locals.user.id;
 
   try {
     const goalData = await request.json();
 
     // Validation
-    if (!goalData.name || !goalData.target_date || !goalData.target_distance_km) {
+    if (!goalData.name || !goalData.target_date) {
       return json(
-        { success: false, error: 'Missing required fields: name, target_date, target_distance_km' },
+        { success: false, error: 'Missing required fields: name, target_date' },
         { status: 400 }
       );
     }
@@ -48,15 +50,29 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       );
     }
 
-    // Validate target distance
-    if (goalData.target_distance_km < 1 || goalData.target_distance_km > 42.2) {
-      return json(
-        { success: false, error: 'Target distance must be between 1 and 42.2 km' },
-        { status: 400 }
-      );
+    if (goalData.goal_type === 'time_goal') {
+      if (!goalData.target_duration_minutes || goalData.target_duration_minutes < 10) {
+        return json(
+          { success: false, error: 'Target duration must be at least 10 minutes' },
+          { status: 400 }
+        );
+      }
+    } else {
+      if (!goalData.target_distance_km) {
+        return json(
+          { success: false, error: 'Target distance is required' },
+          { status: 400 }
+        );
+      }
+      if (goalData.target_distance_km < 1 || goalData.target_distance_km > 42.2) {
+        return json(
+          { success: false, error: 'Target distance must be between 1 and 42.2 km' },
+          { status: 400 }
+        );
+      }
     }
 
-    const goalId = await createGoal(db, {
+    const goalId = await createGoal(db, userId, {
       name: goalData.name,
       goal_type: goalData.goal_type || 'distance',
       target_date: goalData.target_date,

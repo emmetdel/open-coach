@@ -64,9 +64,13 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (!db) {
     throw new Error("Database not available");
   }
+  if (!locals.user) {
+    throw redirect(302, "/login");
+  }
+  const userId = locals.user.id;
 
   // Check if setup is complete
-  const isSetup = await hasCompletedSetup(db);
+  const isSetup = await hasCompletedSetup(db, userId);
   if (!isSetup) {
     throw redirect(307, "/setup");
   }
@@ -81,13 +85,13 @@ export const load: PageServerLoad = async ({ locals }) => {
     progress,
     healthSnapshot,
   ] = await Promise.all([
-    getRecentRuns(db, 10),
-    getConsistencyStats(db, 8),
-    getUpcomingPlans(db, 7),
-    getNextRun(db),
-    calculateStreak(db),
-    getProgressStats(db),
-    getHealthSnapshot(db),
+    getRecentRuns(db, userId, 10),
+    getConsistencyStats(db, userId, 8),
+    getUpcomingPlans(db, userId, 7),
+    getNextRun(db, userId),
+    calculateStreak(db, userId),
+    getProgressStats(db, userId),
+    getHealthSnapshot(db, userId),
   ]);
 
   // Transform runs for display
@@ -173,8 +177,8 @@ export const load: PageServerLoad = async ({ locals }) => {
   const todaysRun = upcomingPlans.find((p) => p.scheduled_date === today);
 
   // Load primary goal data
-  const goals = await getActiveGoals(db);
-  const metadata = await getPlanMetadata(db);
+  const goals = await getActiveGoals(db, userId);
+  const metadata = await getPlanMetadata(db, userId);
   const primaryGoalId = metadata["primary_goal_id"];
   const primaryGoal = primaryGoalId
     ? goals.find((g) => g.id === primaryGoalId)
@@ -184,7 +188,11 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   let primaryGoalProgress = null;
   if (primaryGoal) {
-    primaryGoalProgress = await calculateGoalProgress(db, primaryGoal.id);
+    primaryGoalProgress = await calculateGoalProgress(
+      db,
+      userId,
+      primaryGoal.id,
+    );
   }
 
   // Format today's run for the "I'm going" button
@@ -229,26 +237,29 @@ export const load: PageServerLoad = async ({ locals }) => {
       if (isLowBattery) reasons.push(`Body Battery at ${bodyBattery}%`);
       if (isPoorSleep) reasons.push(`only ${sleepHours?.toFixed(1)}h sleep`);
 
-      recoveryAlert = {
-        type: "low",
-        message: `Your recovery is low today (${reasons.join(", ")}). Pushing through may lead to burnout.`,
-        suggestion: "reschedule",
-        todaysRunId: todaysRun.id,
-        todaysRunType: todaysRun.type,
-      };
+    recoveryAlert = {
+      type: "low",
+      message: `Your recovery is low today (${reasons.join(", ")}). Pushing through may lead to burnout.`,
+      suggestion: "reschedule",
+      todaysRunId: todaysRun.id,
+      todaysRunType: todaysRun.type,
+    };
     } else if (isModerateBattery || isFairSleep) {
       // Moderate recovery - suggest easier workout
-      recoveryAlert = {
-        type: "moderate",
-        message: `Recovery is moderate today. Consider an easier effort or shorter distance.`,
-        suggestion: "reduce",
-        todaysRunId: todaysRun.id,
-        todaysRunType: todaysRun.type,
-      };
-    }
+    recoveryAlert = {
+      type: "moderate",
+      message: `Recovery is moderate today. Consider an easier effort or shorter distance.`,
+      suggestion: "reduce",
+      todaysRunId: todaysRun.id,
+      todaysRunType: todaysRun.type,
+    };
+  }
   }
 
   return {
+    user: {
+      name: locals.user.name,
+    },
     runs: runsDisplay,
     weeklyStats,
     upcomingPlans: plansDisplay,
@@ -288,6 +299,7 @@ export const load: PageServerLoad = async ({ locals }) => {
  */
 async function calculateGoalProgress(
   db: any,
+  userId: string,
   goalId: string,
 ): Promise<{
   percentComplete: number;
@@ -302,9 +314,9 @@ async function calculateGoalProgress(
   // Get all workouts for this goal
   const result = await db
     .prepare(
-      `SELECT * FROM training_plan WHERE goal_id = ? ORDER BY scheduled_date`,
+      `SELECT * FROM training_plan WHERE user_id = ? AND goal_id = ? ORDER BY scheduled_date`,
     )
-    .bind(goalId)
+    .bind(userId, goalId)
     .all();
 
   const workouts = result.results || [];

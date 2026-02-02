@@ -12,18 +12,25 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (!db) {
     throw new Error("Database not available");
   }
+  if (!locals.user) {
+    throw redirect(302, "/login");
+  }
+  const userId = locals.user.id;
 
-  const isSetup = await hasCompletedSetup(db);
+  const isSetup = await hasCompletedSetup(db, userId);
   if (!isSetup) {
     throw redirect(307, "/setup");
   }
 
   // Fetch all runs for analytics
-  const runs = await getRecentRuns(db, 1000);
+  const runs = await getRecentRuns(db, userId, 1000);
 
   // Fetch training plan data for consistency tracking
   const allPlans = await db
-    .prepare('SELECT * FROM training_plan ORDER BY scheduled_date ASC')
+    .prepare(
+      "SELECT * FROM training_plan WHERE user_id = ? ORDER BY scheduled_date ASC",
+    )
+    .bind(userId)
     .all<{ scheduled_date: string; status: string; type: string }>();
 
   // Calculate consistency metrics (even if no runs yet)

@@ -16,7 +16,10 @@ import { sendPushNotification } from "./notifications";
  * Checks if the user has completed their weekly running quota
  * If yes, automatically marks remaining pending runs as completed
  */
-export async function analyzeWeeklyProgress(db: LocalDatabase): Promise<{
+export async function analyzeWeeklyProgress(
+  db: LocalDatabase,
+  userId: string,
+): Promise<{
   weekComplete: boolean;
   runsCompleted: number;
   runsRequired: number;
@@ -39,7 +42,12 @@ export async function analyzeWeeklyProgress(db: LocalDatabase): Promise<{
   const sundayStr = sunday.toISOString().split("T")[0];
 
   // Get all workouts this week
-  const weekWorkouts = await getWorkoutsInRange(db, mondayStr, sundayStr);
+  const weekWorkouts = await getWorkoutsInRange(
+    db,
+    userId,
+    mondayStr,
+    sundayStr,
+  );
 
   // Count completed vs total
   const completed = weekWorkouts.filter((w) => w.status === "Completed").length;
@@ -53,7 +61,7 @@ export async function analyzeWeeklyProgress(db: LocalDatabase): Promise<{
     );
 
     for (const workout of pending) {
-      await updatePlanStatus(db, workout.id, "Completed");
+      await updatePlanStatus(db, userId, workout.id, "Completed");
       autoCompleted++;
     }
   }
@@ -71,7 +79,10 @@ export async function analyzeWeeklyProgress(db: LocalDatabase): Promise<{
  * Checks for runs that should have happened but didn't
  * Sends notifications and creates chat messages
  */
-export async function detectMissedRuns(db: LocalDatabase): Promise<{
+export async function detectMissedRuns(
+  db: LocalDatabase,
+  userId: string,
+): Promise<{
   missedRuns: TrainingPlan[];
   notificationsSent: number;
 }> {
@@ -83,6 +94,7 @@ export async function detectMissedRuns(db: LocalDatabase): Promise<{
   // Find workouts from yesterday that are still pending
   const yesterdaysWorkouts = await getWorkoutsInRange(
     db,
+    userId,
     yesterdayStr,
     yesterdayStr,
   );
@@ -94,11 +106,11 @@ export async function detectMissedRuns(db: LocalDatabase): Promise<{
 
   for (const workout of missedRuns) {
     // Mark as Missed
-    await updatePlanStatus(db, workout.id, "Missed");
+    await updatePlanStatus(db, userId, workout.id, "Missed");
 
     // Send notification
     try {
-      await sendPushNotification(db, {
+      await sendPushNotification(db, userId, {
         title: "Missed your run yesterday? 🤔",
         body: `You had a ${workout.type} run (${workout.target_distance_km}km) scheduled. Everything okay?`,
         tag: `missed-run-${workout.id}`,
@@ -110,7 +122,7 @@ export async function detectMissedRuns(db: LocalDatabase): Promise<{
     }
 
     // Create a chat message for the coach to follow up
-    await insertChatMessage(db, {
+    await insertChatMessage(db, userId, {
       id: crypto.randomUUID(),
       role: "system",
       content: `User missed their ${workout.type} run on ${workout.scheduled_date}. Follow up with empathy and ask if they need help adjusting the plan.`,
@@ -131,12 +143,15 @@ export async function detectMissedRuns(db: LocalDatabase): Promise<{
  * When runs are synced, intelligently match them to the plan
  * Considers the week's quota and auto-completes if needed
  */
-export async function smartMatchRuns(db: LocalDatabase): Promise<{
+export async function smartMatchRuns(
+  db: LocalDatabase,
+  userId: string,
+): Promise<{
   matched: number;
   weekCompleted: boolean;
 }> {
   // Get recent runs (last 7 days)
-  const recentRuns = await getRecentRuns(db, 10);
+  const recentRuns = await getRecentRuns(db, userId, 10);
 
   // Get current week's workouts
   const today = new Date();
@@ -151,7 +166,12 @@ export async function smartMatchRuns(db: LocalDatabase): Promise<{
   sunday.setDate(sunday.getDate() + 6);
   const sundayStr = sunday.toISOString().split("T")[0];
 
-  const weekWorkouts = await getWorkoutsInRange(db, mondayStr, sundayStr);
+  const weekWorkouts = await getWorkoutsInRange(
+    db,
+    userId,
+    mondayStr,
+    sundayStr,
+  );
   const pendingWorkouts = weekWorkouts.filter(
     (w) => w.status === "Pending" && w.type !== "Rest",
   );
@@ -179,7 +199,7 @@ export async function smartMatchRuns(db: LocalDatabase): Promise<{
     }
 
     if (closestWorkout) {
-      await updatePlanStatus(db, closestWorkout.id, "Completed");
+      await updatePlanStatus(db, userId, closestWorkout.id, "Completed");
       matched++;
       // Remove from pending list
       const index = pendingWorkouts.findIndex(
@@ -190,7 +210,7 @@ export async function smartMatchRuns(db: LocalDatabase): Promise<{
   }
 
   // Check if week is complete
-  const analysis = await analyzeWeeklyProgress(db);
+  const analysis = await analyzeWeeklyProgress(db, userId);
 
   return {
     matched,
@@ -202,12 +222,15 @@ export async function smartMatchRuns(db: LocalDatabase): Promise<{
  * Consistency Check
  * Detects if user is falling behind and needs encouragement
  */
-export async function checkConsistency(db: LocalDatabase): Promise<{
+export async function checkConsistency(
+  db: LocalDatabase,
+  userId: string,
+): Promise<{
   streak: number;
   lastRunDaysAgo: number;
   needsEncouragement: boolean;
 }> {
-  const recentRuns = await getRecentRuns(db, 30);
+  const recentRuns = await getRecentRuns(db, userId, 30);
 
   if (recentRuns.length === 0) {
     return {

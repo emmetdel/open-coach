@@ -21,25 +21,32 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (!db) {
     throw new Error("Database not available");
   }
+  if (!locals.user) {
+    throw redirect(302, "/login");
+  }
+  const userId = locals.user.id;
 
-  const isSetup = await hasCompletedSetup(db);
+  const isSetup = await hasCompletedSetup(db, userId);
   if (!isSetup) {
     throw redirect(307, "/setup");
   }
 
   const [metadata, currentWeek, goals] = await Promise.all([
-    getPlanMetadata(db),
-    getCurrentWeekNumber(db),
-    getActiveGoals(db),
+    getPlanMetadata(db, userId),
+    getCurrentWeekNumber(db, userId),
+    getActiveGoals(db, userId),
   ]);
 
   const planName = metadata["plan_name"] || "Your Training Plan";
   const totalWeeks = parseInt(metadata["total_weeks"] || "0", 10);
-  const primaryGoal = goals.find((g) => g.is_primary) || null;
+  const primaryGoal = goals[0] || null;
 
   // Get all training plans for calendar
   const allPlans = await db
-    .prepare('SELECT * FROM training_plan ORDER BY scheduled_date ASC')
+    .prepare(
+      "SELECT * FROM training_plan WHERE user_id = ? ORDER BY scheduled_date ASC",
+    )
+    .bind(userId)
     .all<{
       id: string;
       scheduled_date: string;

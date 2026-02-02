@@ -5,12 +5,13 @@ import { pushWeekToGarmin, hasValidTokens } from '$lib/server/garmin';
 // POST: Push upcoming workouts to Garmin watch
 export const POST: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
 	// Check if Garmin is connected
-	const hasTokens = await hasValidTokens(db);
+	const hasTokens = await hasValidTokens(db, userId);
 	if (!hasTokens) {
 		return json({
 			success: false,
@@ -19,7 +20,7 @@ export const POST: RequestHandler = async ({ locals }) => {
 	}
 
 	try {
-		const result = await pushWeekToGarmin(db);
+		const result = await pushWeekToGarmin(db, userId);
 
 		if (result.success) {
 			return json({
@@ -47,11 +48,12 @@ export const POST: RequestHandler = async ({ locals }) => {
 // GET: Check sync status
 export const GET: RequestHandler = async ({ locals }) => {
 	const db = locals.db;
-	if (!db) {
+	if (!db || !locals.user) {
 		throw error(500, 'Database not available');
 	}
+	const userId = locals.user.id;
 
-	const hasTokens = await hasValidTokens(db);
+	const hasTokens = await hasValidTokens(db, userId);
 
 	return json({
 		connected: hasTokens,
