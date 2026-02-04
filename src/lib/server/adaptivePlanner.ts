@@ -1,4 +1,5 @@
 import type { Database, TrainingPlan } from "./db";
+import { parseAvailableDays } from "$lib/days";
 import { getSetting, SETTING_KEYS } from "./db";
 
 export interface WeeklyAnalysis {
@@ -329,7 +330,8 @@ async function getAvailableDays(
   userId: string,
 ): Promise<string[]> {
   const value = await getSetting(db, userId, SETTING_KEYS.AVAILABLE_DAYS);
-  return value ? JSON.parse(value) : ["Mon", "Wed", "Fri", "Sun"];
+  const parsed = parseAvailableDays(value, { sort: true });
+  return parsed.length > 0 ? parsed : ["Mon", "Wed", "Fri", "Sun"];
 }
 
 function getDayOfWeek(dateString: string): string {

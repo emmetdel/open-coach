@@ -1,4 +1,5 @@
 import type { PageServerLoad } from './$types';
+import { parseAvailableDays } from '$lib/days';
 import { getSetting, SETTING_KEYS, hasEnvGarminCredentials } from '$lib/server/db';
 import { hasValidTokens } from '$lib/server/garmin';
 
@@ -33,14 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 	]);
 
 	// Parse available days
-	let daysArray: string[] = [];
-	if (availableDays) {
-		try {
-			daysArray = JSON.parse(availableDays);
-		} catch {
-			daysArray = availableDays.split(',');
-		}
-	}
+	const daysArray = parseAvailableDays(availableDays, { sort: true });
 
 	return {
 		settings: {

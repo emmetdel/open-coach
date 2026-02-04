@@ -21,6 +21,7 @@ import {
 } from "$lib/prompts";
 import { PLAN_TOOLS, executePlanTool, type ToolDefinition } from "./tools";
 import { insertChatMessage, getChatHistory, type ChatMessage } from "./db";
+import { parseAvailableDays } from "$lib/days";
 
 const OPENROUTER_API_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -345,7 +346,7 @@ export async function generateFullPlan(
     };
   }
 
-  const availableDays: string[] = JSON.parse(availableDaysJson);
+  const availableDays = parseAvailableDays(availableDaysJson, { sort: true });
 
   // Calculate weeks until goal
   // Generate full plan for visibility, but only next 7 days sync to Garmin

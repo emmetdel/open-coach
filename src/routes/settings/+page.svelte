@@ -23,6 +23,7 @@
         Smartphone,
     } from "lucide-svelte";
     import { onMount } from "svelte";
+    import { DAY_OPTIONS } from "$lib/days";
 
     let { data } = $props();
 
@@ -203,15 +204,7 @@
         }
     }
 
-    const allDays = [
-        "Monday",
-        "Tuesday",
-        "Wednesday",
-        "Thursday",
-        "Friday",
-        "Saturday",
-        "Sunday",
-    ];
+    const allDays = DAY_OPTIONS;
 
     const popularModels = [
         {
@@ -536,14 +529,14 @@
                             {#each allDays as day}
                                 <button
                                     type="button"
-                                    onclick={() => toggleDay(day)}
+                                    onclick={() => toggleDay(day.value)}
                                     class="rounded-lg px-3 py-1.5 text-sm font-medium transition-colors {availableDays.includes(
-                                        day,
+                                        day.value,
                                     )
                                         ? 'bg-forest-500 text-white'
                                         : 'bg-slate-800 text-slate-400 hover:bg-slate-700'}"
                                 >
-                                    {day.slice(0, 3)}
+                                    {day.value}
                                 </button>
                             {/each}
                         </div>

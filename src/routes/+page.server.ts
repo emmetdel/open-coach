@@ -23,6 +23,7 @@ import {
   getProgressStats,
   getBeginnerTips,
 } from "$lib/server/reminders";
+import { parseAvailableDays } from "$lib/days";
 
 export interface RunDisplay {
   garmin_activity_id: string;
@@ -217,12 +218,8 @@ export const load: PageServerLoad = async ({ locals }) => {
   if (runsPerWeekSetting) {
     weeklyTarget = parseInt(runsPerWeekSetting, 10);
   } else if (availableDaysSetting) {
-    try {
-      const days = JSON.parse(availableDaysSetting);
-      weeklyTarget = Array.isArray(days) ? days.length : 3;
-    } catch {
-      weeklyTarget = 3;
-    }
+    const days = parseAvailableDays(availableDaysSetting, { sort: true });
+    weeklyTarget = days.length > 0 ? days.length : 3;
   }
 
   // Get this week's run count

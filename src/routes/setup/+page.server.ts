@@ -1,4 +1,5 @@
 import type { PageServerLoad } from './$types';
+import { parseAvailableDays } from '$lib/days';
 import { getSettings, SETTING_KEYS, hasEnvGarminCredentials, getActiveGoals, getPlanMetadata } from '$lib/server/db';
 
 export const load: PageServerLoad = async ({ locals }) => {
@@ -33,7 +34,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 		existingSettings: {
 			// If env vars are set, show that email instead
 			garminEmail: garminFromEnv ? process.env.GARMIN_EMAIL : (settings[SETTING_KEYS.GARMIN_EMAIL] || ''),
-			availableDays: availableDays ? JSON.parse(availableDays) : [],
+			availableDays: availableDays ? parseAvailableDays(availableDays, { sort: true }) : [],
 			currentFitness: settings[SETTING_KEYS.CURRENT_FITNESS] || ''
 		},
 		primaryGoal,

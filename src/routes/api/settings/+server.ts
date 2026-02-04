@@ -1,5 +1,6 @@
 import { json, error } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
+import { normalizeAvailableDays, parseAvailableDays } from '$lib/days';
 import { getSetting, setSettings, SETTING_KEYS, AVAILABLE_MODELS, hasCompletedSetup } from '$lib/server/db';
 import { validateApiKey } from '$lib/server/coach';
 
@@ -87,7 +88,7 @@ export const GET: RequestHandler = async ({ locals }) => {
 		has_openrouter_key: !!openrouterKey,
 		openrouter_model: openrouterModel,
 		target_date: targetDate,
-		available_days: availableDays ? JSON.parse(availableDays) : null,
+		available_days: availableDays ? parseAvailableDays(availableDays, { sort: true }) : null,
 		current_fitness: currentFitness,
 		runs_per_week: runsPerWeek ? parseInt(runsPerWeek, 10) : null,
 		notification_email: notificationEmail,
@@ -201,7 +202,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		settingsToSave[SETTING_KEYS.TARGET_DATE] = payload.target_date;
 	}
 	if (payload.available_days) {
-		settingsToSave[SETTING_KEYS.AVAILABLE_DAYS] = JSON.stringify(payload.available_days);
+		const normalizedDays = normalizeAvailableDays(payload.available_days, { sort: true });
+		settingsToSave[SETTING_KEYS.AVAILABLE_DAYS] = JSON.stringify(normalizedDays);
 	}
 	if (payload.current_fitness !== undefined) {
 		settingsToSave[SETTING_KEYS.CURRENT_FITNESS] = payload.current_fitness;

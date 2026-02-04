@@ -1,6 +1,7 @@
 import { json, error } from "@sveltejs/kit";
 import type { RequestHandler } from "./$types";
 import { generateFullPlan } from "$lib/server/coach";
+import { parseAvailableDays } from "$lib/days";
 import {
   hasCompletedSetup,
   deleteAllPlans,
@@ -110,7 +111,7 @@ export const POST: RequestHandler = async ({ locals, request }) => {
       goalDistance: primaryGoal.target_distance_km || 10,
       currentFitness: currentFitness || "",
       availableDays: availableDaysJson
-        ? JSON.parse(availableDaysJson)
+        ? parseAvailableDays(availableDaysJson, { sort: true })
         : ["Mon", "Wed", "Fri", "Sun"],
       recentRuns: await getRecentRuns(db, userId, 28), // Last 4 weeks
     });
